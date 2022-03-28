@@ -1,6 +1,6 @@
 ---
-layout: page
-title: "PAGE TITLE"
+layout: post
+title: PAGE TITLE
 permalink: /test/
 ---
 
