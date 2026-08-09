@@ -126,23 +126,55 @@ sections, **the transform must emit every section already sorted** — see D15.
 
 ## 2. `_data/socials.yml` (`jekyll-socials 0.0.7`)
 
-Order in the file is display order. Every key the gem knows:
+Order in the file is display order. A key is **built in** when it appears in the gem's icon
+maps _and_ its URL-template map; enumerating both from
+`jekyll-socials-0.0.7/lib/jekyll-socials.rb` gives **49 keys, and the two sets are identical**
+— no key has an icon without a URL template or vice versa:
 
-`acm_id`, `arxiv_id`, `blogger_url`, `bluesky_url`, `cv_pdf`, `dblp_url`, `discord_id`,
-`email`, `facebook_id`, `flickr_id`, `github_username`, `gitlab_username`, `hal_id`,
-`ieee_id`, `inspirehep_id`, `instagram_id`, `kaggle_id`, `keybase_username`, `lastfm_id`,
-`lattes_id`, `leetcode_id`, `letterboxd_id`, `linkedin_username`, `mastodon_username`,
-`medium_username`, `orcid_id`, `osf_id`, `pinterest_id`, `publons_id`, `quora_username`,
-`rss_icon`, `scholar_userid`, `scopus_id`, `semanticscholar_id`, `spotify_id`,
-`stackoverflow_id`, `strava_userid`, `telegram_username`, `unsplash_id`, `wechat_username`,
-`whatsapp_number`, `wikidata_id`, `wikipedia_id`, `work_url`, `x_username`, `youtube_id`,
-`zotero_username`.
+`academia_edu`, `acm_id`, `arxiv_id`, `blogger_url`, `bluesky_url`, `cv_pdf`, `dblp_url`,
+`discord_id`, `email`, `facebook_id`, `flickr_id`, `github_username`, `gitlab_username`,
+`hal_id`, `ieee_id`, `inspirehep_id`, `instagram_id`, `kaggle_id`, `keybase_username`,
+`lastfm_id`, `lattes_id`, `leetcode_id`, `letterboxd_id`, `linkedin_username`,
+`mastodon_username`, `medium_username`, `orcid_id`, `osf_id`, `pinterest_id`, `publons_id`,
+`quora_username`, `research_gate_profile`, `rss_icon`, `scholar_userid`, `scopus_id`,
+`semanticscholar_id`, `spotify_id`, `stackoverflow_id`, `strava_userid`, `telegram_username`,
+`unsplash_id`, `wechat_username`, `whatsapp_number`, `wikidata_id`, `wikipedia_id`,
+`work_url`, `x_username`, `youtube_id`, `zotero_username`.
 
-Unknown keys are dropped with no warning — the first of upstream's three silent failure modes.
+Most take a bare scalar. Three are special-cased: `academia_edu` needs a hash
+(`{organization, username}` — the only two-part URL template), `cv_pdf` takes a path or URL
+(baseurl-prefixed, with `[LANG]` support for jekyll-polyglot), and `rss_icon` ignores its value
+and links `/feed.xml`. Any built-in key may also take a hash with `logo:` to override its icon,
+supplying the value as `value:` (or as the key's own name again).
 
-Relevant to this site: `strava_userid`, `spotify_id` and `lastfm_id` exist and are useful for
-the Personal page. **There is no `goodreads` and no `wikiloc` key** — both need
-`custom_social` (`logo` + `title` + `url`) or plain links in page content.
+### Unknown keys are not ignored — they are the custom-social mechanism, or a crash
+
+There is **no literal `custom_social:` keyword.** The render loop's `else` branch (key absent
+from both maps) does not skip the entry — it reads `logo`, `title` and `url` off the value. So
+the _key name is arbitrary_ and the shape is what matters:
+
+```yaml
+goodreads:
+  logo: fa-brands fa-goodreads # an icon class, or an image path / URL (.png .jpg .gif .webp .svg)
+  title: Goodreads
+  url: https://www.goodreads.com/user/show/7400919-pedro
+```
+
+Upstream's stock file called this key `custom_social`, which is a convention, not a keyword.
+
+An unknown key with a **scalar** value **fails the build** — `"someid"['logo']` is `nil`, then
+`nil.split('.')` raises `NoMethodError`. Verified against the pinned gem. One edge case, also
+verified: if the scalar happens to contain the substring `logo` (e.g. a URL ending
+`/logo.png`), Ruby's `String#[]` returns `"logo"` instead of `nil`, so the build survives and
+emits an empty `href` with a bogus icon class. Loud failure in the normal case, quiet
+corruption in that one.
+
+Relevant to this site: `strava_userid`, `spotify_id`, `lastfm_id` and `letterboxd_id` are all
+built in and useful for the Personal page. Goodreads and Wikiloc have no built-in key, but per
+the above they can still be **first-class social icons** via the arbitrary-key form — better
+than the in-page-links-only assumption this document previously recorded. (Check that the
+bundled FontAwesome actually carries `fa-brands fa-goodreads`; if not, point `logo` at an
+image under `assets/img/`.)
 
 ---
 

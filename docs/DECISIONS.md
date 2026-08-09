@@ -277,9 +277,13 @@ teaching). If no course needs a page, the collection stays empty and that is fin
 
 Confirms the plan's provisional call with the mechanics verified: `layout: book-review` for
 entries, `layout: book-shelf` for the index, no third-party dependency, no API that can be
-retired under us. `jekyll-socials` has no `goodreads` key either, so even the profile link needs
-`custom_social`. The Goodreads profile (`7400919-pedro`) becomes a plain link, and book entries
-come from the graph like everything else.
+retired under us. Book entries come from the graph like everything else.
+
+`jekyll-socials` has no built-in `goodreads` key, but that costs less than first recorded: an
+**arbitrary** key whose value is a `{logo, title, url}` hash renders as a social icon (there is
+no literal `custom_social:` keyword — see `SCHEMA-NOTES.md` §2), so the Goodreads profile
+(`7400919-pedro`) can be a first-class icon rather than only an in-page link. Same mechanism
+covers Wikiloc under D19.
 
 ### D18 — The Personal page needs no local layout override _(closes unknown #5)_
 
@@ -389,6 +393,20 @@ Two changes, because either alone leaves a hole:
    under you.
 2. **Quoted source excerpts are fenced as `text`**, not as their language, whenever they are
    truncated. A formatter should never be in a position to rewrite a quotation.
+
+### D26 — Enumerate a gem's accepted keys by parsing the gem, not by grepping it
+
+`SCHEMA-NOTES.md` §2 originally listed 47 of `jekyll-socials`' 49 built-in keys and claimed
+unknown keys are silently dropped. Both errors came from method: the list was assembled with a
+regex over patterns like `*_username` / `*_id` / `*_url`, which structurally cannot match
+`academia_edu` or `research_gate_profile`, and the silent-drop claim was inferred from the key
+maps without reading the render loop's `else` branch — which in fact implements the
+custom-social mechanism and raises `NoMethodError` on a scalar value.
+
+Rule for the rest of the pipeline work: when a document's value _is_ its accuracy, enumerate
+from the source of truth mechanically (parse the constant, run the code) and state how it was
+obtained. A grep proves a key exists; it never proves a list is complete. The corrected §2 was
+produced by parsing the gem's constant tables and by executing the failing expression.
 
 ---
 
