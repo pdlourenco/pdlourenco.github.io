@@ -182,7 +182,10 @@ with `layout: page` can loop over `site.data.*` inline. This closes `seed.md` kn
 
 Consumed by `al_folio_core _layouts/bib.liquid`. Matching is:
 
-```liquid
+Excerpt from `bib.liquid`, fenced as `text` on purpose — it is truncated mid-block, and a
+Liquid formatter would "complete" it with closing tags the real source does not have here:
+
+```text
 {%- assign clean_last_name = author_last_name | downcase | remove_accents -%}
 {% if site.data.coauthors[clean_last_name] %}
   {%- for coauthor in site.data.coauthors[clean_last_name] -%}

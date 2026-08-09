@@ -369,6 +369,27 @@ accent-stripped surname → list of `{firstname: [variants], url}`. The list-of-
 what resolves surname collisions, provided every initial form appearing in the `.bib` is
 emitted.
 
+### D25 — CI lints with the versions the lockfile pins
+
+`prettier.yml` as inherited ran `npm install --save-dev --save-exact prettier @shopify/prettier-plugin-liquid`,
+installing whatever was newest and ignoring `package-lock.json`. It now runs `npm ci`.
+
+This was not hypothetical: it failed PR #3. The runner picked up
+`@shopify/prettier-plugin-liquid 1.11.0` where the lockfile pins `1.10.0`, and 1.11.0's Liquid
+printer reformats fenced ` ```liquid ` blocks. `docs/SCHEMA-NOTES.md` quotes a **deliberately
+truncated** excerpt of `bib.liquid`, so the newer plugin "fixed" it by appending
+`{% endif -%}{%- endfor -%}{%- endif %}` — turning a faithful quotation into code the gem does
+not contain, and the `{% if %}` into a self-closed no-op. A green local check and a red CI check
+on identical bytes.
+
+Two changes, because either alone leaves a hole:
+
+1. **CI uses the lockfile** (`npm ci`), so local and CI check with the same versions. This is
+   D10's rule applied to lint tooling: an unpinned dependency in CI is a build that changes
+   under you.
+2. **Quoted source excerpts are fenced as `text`**, not as their language, whenever they are
+   truncated. A formatter should never be in a position to rewrite a quotation.
+
 ---
 
 ## Owner action items (nothing in a commit can do these)
