@@ -1,0 +1,67 @@
+name: Render a CV
+# The push trigger is disabled until Phase 3 generates _data/cv.yml: without that file
+# this workflow exits 1 ("No cv.yml file found!"), so importing assets/rendercv/ alone
+# would have made the bootstrap commit red. Phase 3 restores the commented block.
+on:
+  # push:
+  #   branches:
+  #     - main
+  #     - master
+  #   paths:
+  #     - "_data/cv.yml"
+  #     - "assets/rendercv/design.yaml"
+  #     - "assets/rendercv/locale.yaml"
+  #     - "assets/rendercv/settings.yaml"
+  workflow_call:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  rendercv:
+    name: RenderCV
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install RenderCV
+        run: |
+          pip install -r requirements.txt
+      - name: RenderCV
+        run: |
+          cv_file=$(find _data  -maxdepth 1 -type f \( -name "cv.yaml" -o -name "cv.yml" \))
+          if [ -z "$cv_file" ]; then
+            echo "No cv.yml file found!"
+            exit 1
+          fi
+          rendercv_dir=$(find assets -maxdepth 1 -type d -name "rendercv")
+          if [ -z "$rendercv_dir" ]; then
+            echo "No RenderCV config directory found!"
+            exit 1
+          fi
+          # RenderCV 2.x: the flag is --rendercv-settings and the file's top-level key is
+          # rendercv_settings (upstream passes --settings, which 2.x parses as a CV field
+          # override and rejects as unknown).
+          settings=$(find $rendercv_dir -maxdepth 1 -type f \( -name "settings.yaml" -o -name "settings.yml" \))
+          if [ -z "$settings" ]; then
+            echo "Missing RenderCV config file!"
+            exit 1
+          fi
+          rendercv render $cv_file --rendercv-settings $settings
+          rm assets/rendercv/rendercv_output/*.typ
+      - name: Upload rendercv_output as an artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: RenderCV Output
+          path: assets/rendercv/rendercv_output
+      - name: Push the changes
+        run: |
+          git config --global user.name "${{ github.actor }}"
+          git config --global user.email "${{ github.actor }}@users.noreply.github.com"
+          # Deliberately narrow: upstream's `git add -A` would commit anything else dirty
+          # in the tree, which under the committed-output model (docs/DECISIONS.md D4)
+          # is a route for un-reviewed generated files to reach the default branch.
+          git add assets/rendercv
+          git commit -m "chore: render the latest CV"
+          git push

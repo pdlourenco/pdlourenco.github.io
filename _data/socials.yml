@@ -1,0 +1,12 @@
+# Social media links and usernames, displayed in the order defined here.
+# See the jekyll-socials plugin: https://github.com/george-gca/jekyll-socials
+#
+# GENERATED-TO-BE: from Phase 3 onwards this file is produced by bin/transform.py from
+# _incoming/profile.yml. Until then it is hand-written and deliberately minimal — only
+# identifiers that are already public and verifiable are listed here.
+#
+# TODO(owner): supply `email:` and, if wanted, `scholar_userid:` / `orcid_id:`.
+# They are intentionally absent rather than guessed.
+github_username: pdlourenco
+linkedin_username: pdlourenco
+rss_icon: true # comment this line to hide the RSS icon
