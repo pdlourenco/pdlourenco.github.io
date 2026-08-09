@@ -1,0 +1,8 @@
+github_users:
+  - pdlourenco
+
+repo_description_lines_max: 2
+
+github_repos:
+  - pdlourenco/pdlourenco.github.io
+  - pdlourenco/logseq-alfolio-export

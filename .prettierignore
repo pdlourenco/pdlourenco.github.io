@@ -1,0 +1,8 @@
+**/*.map
+**/*.min.css
+**/*.min.js
+
+# seed.md is the original project brief, kept frozen as a historical record
+# (see CLAUDE.md "Read these first"). Formatting it would add diff noise to a file
+# nobody edits.
+seed.md

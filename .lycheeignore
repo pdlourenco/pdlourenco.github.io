@@ -1,0 +1,7 @@
+# URL excludes only. Path excludes live in .github/workflows/broken-links.yml, and the
+# upstream list this replaced named demo files that were never imported (see D6).
+#
+# linkedin.com blocks bots, so _data/socials.yml would flake the link check.
+https://dash.cloudflare.com/
+https://www.linkedin.com/
+https://www.reddit.com/
