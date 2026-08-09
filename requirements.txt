@@ -1,0 +1,13 @@
+# Python dependencies for this site's tooling.
+#
+# Pinned deliberately: `.github/workflows/render-cv.yml` does `pip install -r requirements.txt`,
+# so an unpinned RenderCV release can turn CI red with no change on our side. Upstream ships
+# this file unpinned; see docs/DECISIONS.md (D7).
+#
+# Note: bin/setup-python-deps does NOT read this file — it installs jupyter/nbconvert only.
+# scholarly (upstream, for bin/update_scholar_citations.py) is omitted: the update-citations
+# workflow was not imported. Reinstate both together if Google Scholar counts are wanted.
+rendercv[full]==2.3
+click==8.4.2 # rendercv 2.3 imports click.core but does not declare it; its CLI is unusable without this
+pyyaml==6.0.3
+nbconvert==7.17.1
