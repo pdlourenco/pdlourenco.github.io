@@ -12,12 +12,15 @@ formats by scripts that live _in this repo_.
 | [`seed.md`](seed.md)                                         | The original brief: architecture, target site structure, pipeline, conventions. Kept unedited as a historical record. |
 | [`docs/IMPLEMENTATION-PLAN.md`](docs/IMPLEMENTATION-PLAN.md) | Critical analysis of the brief, the phased plan, and the review contract every PR is held to.                         |
 | [`docs/DECISIONS.md`](docs/DECISIONS.md)                     | Resolved decisions with rationale.                                                                                    |
+| [`docs/SCHEMA-NOTES.md`](docs/SCHEMA-NOTES.md)               | What this al-folio actually expects, read out of the installed gems. Read before writing any transform mapping.       |
 
 **Precedence — later overrides earlier: `seed.md` → `docs/IMPLEMENTATION-PLAN.md` →
 `docs/DECISIONS.md`.** `seed.md` is deliberately not rewritten as decisions supersede it, so
 check the later two before treating anything in it as current. Known supersessions so far:
-the bibliography ownership model (P3), the CI/commit model (P4), the `_projects/`
-duplication question (P8), and Goodreads vs the native `_books/` collection.
+the bibliography ownership model (P3/D24), the CI/commit model (P4/D4), the `_projects/`
+duplication question (P8/D23), Goodreads vs the native `_books/` collection (D17), the
+plugin's export path (D20 — `seed.md`'s is wrong), and the entry types custom CV sections
+must use (D14 — `seed.md`'s `NormalEntry` guess renders blank).
 
 ## What is upstream's and what is ours
 
@@ -37,7 +40,9 @@ gem owns what) and `CUSTOMIZE.md`. Two upstream rules **do not** apply here:
 
 - the "stop sign" forbidding local `_layouts/`, `_includes/`, `_sass/` — upstream states
   that restriction binds its own starter repo, and that sites built from the template may
-  legally shadow gem-owned files. The Personal page (Phase 5) is expected to need one.
+  legally shadow gem-owned files. Overrides are therefore permitted here, but not expected:
+  `page.liquid` renders `{{ content }}` verbatim and Jekyll runs Liquid inside page content,
+  so even the `_data`-driven Personal page needs no override (`docs/DECISIONS.md` D18).
 - `npm run lint:style-contract`, which enforces that stop sign. It was not imported.
 
 Three upstream rules **do** apply, and all three fail silently:
