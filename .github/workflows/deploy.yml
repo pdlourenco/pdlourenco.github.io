@@ -84,17 +84,18 @@ jobs:
           cache: "npm"
       - name: Install JS deps 📦
         run: npm ci
-      - name: Update _config.yml ⚙️
-        uses: fjogeleit/yaml-update-action@main
-        with:
-          commitChange: false
-          valueFile: "_config.yml"
-          propertyPath: "giscus.repo"
-          value: ${{ github.repository }}
+      # Upstream had a `fjogeleit/yaml-update-action@main` step here that stamped
+      # giscus.repo with ${{ github.repository }}. Removed rather than pinned: giscus is
+      # not configured (repo_id/category_id are empty) and no page enables comments, so the
+      # step did nothing — and a mutable third-party action ref inside a `contents: write`
+      # workflow that publishes the site is a needless supply-chain surface. If comments are
+      # ever wanted, set giscus.repo in _config.yml directly. See docs/DECISIONS.md (D10).
       - name: Install and Build 🔧
         run: |
           sudo apt-get update && sudo apt-get install -y imagemagick
-          pip3 install --upgrade nbconvert
+          # Pinned to match requirements.txt (D7); upstream used --upgrade, which
+          # reinstalled an unpinned nbconvert on every deploy.
+          pip3 install nbconvert==7.17.1
           export JEKYLL_ENV=production
           bundle exec jekyll build
       - name: Purge unused CSS 🧹

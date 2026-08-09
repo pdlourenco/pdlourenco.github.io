@@ -47,9 +47,24 @@ Phase 1 reinstates it only if JSONResume beats RenderCV.
 ### D4 — Generated output is committed; CI only ever verifies it
 
 Restates the plan's P4 decision as binding: `bin/transform.py` runs on a developer machine,
-its output is committed, and CI runs `--check`. No workflow regenerates output. This is why
-`render-cv.yml`'s `git add -A` was narrowed to `git add assets/rendercv` — as shipped it
-would commit anything else dirty in the tree straight to the default branch.
+its output is committed, and CI runs `--check`. No workflow regenerates transform output.
+This is why `render-cv.yml`'s `git add -A` was narrowed to `git add assets/rendercv` — as
+shipped it would commit anything else dirty in the tree straight to the default branch.
+
+**One deliberate exception, so nobody "fixes" it later:** `render-cv.yml` _is_ CI generating
+and committing a file to the default branch — the rendered CV PDF under
+`assets/rendercv/rendercv_output/`. That is a build artifact of a pinned external tool, not
+transform output, and it cannot be produced on a developer machine reliably (Typst fetches
+font packages at render time). The rule that matters is the narrow one: **nothing that
+`bin/transform.py` owns is ever written by CI.** The `git add` narrowing above is what keeps
+this exception from widening.
+
+Its commit step is also guarded — `git commit` exits 1 on "nothing to commit", so an
+unchanged render would otherwise fail the run the moment Phase 3 re-enables the trigger:
+
+```bash
+git diff --cached --quiet || (git commit -m "chore: render the latest CV" && git push)
+```
 
 ### D5 — Our `CLAUDE.md` is authoritative; upstream's agent docs are vendored reference
 
@@ -155,6 +170,43 @@ until Phases 4 and 6 respectively.
 `al_folio_core`'s legacy-pattern scanner when the shell locale is `C`/POSIX, because this
 site's own content is not ASCII ("Lourenço"). Build with `LANG=C.UTF-8`. GitHub runners are
 already UTF-8, so this is a local-environment note, not a CI issue.
+
+### D10 — Third-party surface in CI is removed or pinned, not inherited
+
+From the Phase 0 review. Upstream's `deploy.yml` ran `fjogeleit/yaml-update-action@main` — a
+**mutable** third-party ref inside a `contents: write` workflow that publishes the site — to
+stamp `giscus.repo`. Removed rather than pinned: giscus has no `repo_id`/`category_id` and no
+page enables comments, so the step did nothing. If comments are ever wanted, set
+`giscus.repo` in `_config.yml` directly. Same file: `pip3 install --upgrade nbconvert` now
+installs the D7 pin instead of re-floating the version on every deploy.
+
+Standing rule: a third-party action in a workflow with write permission is either pinned to a
+commit SHA or removed. Upstream inheritance is not a reason to keep one.
+
+### D11 — Stock branding counts as demo content
+
+Also from the review, and a genuine miss in D3's verification: `blog_name: al-folio` /
+`blog_description: a simple whitespace theme for academics` render as the `/blog/` masthead
+(`<h1>`/`<h2>`), and blog is one of the two pages with nav on. The import check grepped for
+"Einstein" and `/al-folio` links, which does not catch upstream's own product name used as
+site copy. Both are blank now (the Liquid guards on a non-empty value, so the header bar
+simply doesn't render), as is `disqus_shortname: al-folio`, which pointed at upstream's forum.
+
+Lesson for later phases: when checking that nothing upstream leaked into a page, read the
+rendered `_site` output, don't just grep sources for the obvious names.
+
+`.lycheeignore` was trimmed for the same reason — most of it named demo files that were never
+imported, plus paths already excluded in `broken-links.yml`. Only the URL excludes remain
+(`linkedin.com` blocks bots and would flake the check against `_data/socials.yml`).
+
+### D12 — Imported skills carry an adaptation note
+
+`.agents/skills/` is auto-loaded into every future session through the `.claude/skills`
+symlink, and both imported skills are written for someone working _on_ al-folio: they tell the
+reader to build with `--baseurl /al-folio` (wrong here per D2), to read a root `AGENTS.md`
+(not imported per D5), and to route changes into plugin repos. Each now opens with a short
+"Adaptations for this repo" note instead of being rewritten, which keeps the diff against
+upstream small for future upgrades.
 
 ---
 

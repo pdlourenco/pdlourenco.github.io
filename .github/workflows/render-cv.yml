@@ -63,5 +63,6 @@ jobs:
           # in the tree, which under the committed-output model (docs/DECISIONS.md D4)
           # is a route for un-reviewed generated files to reach the default branch.
           git add assets/rendercv
-          git commit -m "chore: render the latest CV"
-          git push
+          # Guarded: `git commit` exits 1 with "nothing to commit", so an unchanged
+          # render would fail the run once Phase 3 re-enables the trigger.
+          git diff --cached --quiet || (git commit -m "chore: render the latest CV" && git push)

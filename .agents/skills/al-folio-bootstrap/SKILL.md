@@ -1,5 +1,18 @@
 # al-folio Bootstrap
 
+> **Adaptations for this repo (pdlourenco.github.io).** This skill was imported from the
+> al-folio starter and is written for someone working _on_ al-folio. Here:
+>
+> - **`baseurl` stays empty.** Build and serve with no `--baseurl` — this is a user site at
+>   the domain root. Ignore any `--baseurl /al-folio` in the commands below (`docs/DECISIONS.md` D2).
+> - **Upstream docs live under `docs/al-folio/`** (`ARCHITECTURE.md`, `BOUNDARIES.md`,
+>   `CUSTOMIZE.md`, …). There is no root `AGENTS.md`; `CLAUDE.md` is ours and is the entry point.
+> - **Do not route work to plugin repos.** We consume the `al_*` gems as released versions.
+> - **The style contract does not apply.** Local `_layouts/`/`_includes/`/`_sass/` overrides are
+>   legitimate here, and `npm run lint:style-contract` was not imported (D5).
+> - **Precedence:** `seed.md` → `docs/IMPLEMENTATION-PLAN.md` → `docs/DECISIONS.md`. Local
+>   builds need `LANG=C.UTF-8` (D9).
+
 Use this skill when a user asks an agent to create, configure, or personalize a new al-folio v1.x website.
 
 ## Workflow

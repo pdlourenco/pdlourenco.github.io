@@ -134,8 +134,12 @@ bing_site_verification: # out your bing-site-verification ID (Bing Webmaster)
 # Blog
 # -----------------------------------------------------------------------------
 
-blog_name: al-folio # blog_name will be displayed in your blog page
-blog_description: a simple whitespace theme for academics
+# Left blank deliberately: these render as the /blog/ masthead (<h1>/<h2>) and the
+# stock values are upstream's own branding. The Liquid guards on a non-empty value, so
+# blank cleanly hides the header bar.
+# TODO(owner): set these if you want a blog title and tagline.
+blog_name: # blog_name will be displayed in your blog page
+blog_description:
 permalink: /blog/:year/:title/
 lsi: false # produce an index for related posts
 
@@ -164,7 +168,7 @@ giscus:
   lang: en
 
 # Disqus comments (DEPRECATED)
-disqus_shortname: al-folio # put your disqus shortname
+disqus_shortname: # put your disqus shortname (stock value pointed at upstream's forum)
 # https://help.disqus.com/en/articles/1717111-what-s-a-shortname
 
 # External sources.
