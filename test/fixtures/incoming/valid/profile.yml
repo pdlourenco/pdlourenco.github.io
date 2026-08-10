@@ -1,0 +1,30 @@
+# FIXTURE — contract v1. Not real data.
+#
+# Note there are no explicit nulls here: this file is a mapping, and the plugin's
+# YAML writer drops nulls in mappings. `web.url` is absent rather than null, which
+# is the shape the transform must treat as "build the URL from the id".
+name_long: John Doe
+name_short: J. Doe
+initials: JD
+email_personal: john@example.com
+bio_short: Engineer and researcher.
+bio_long: |
+  A longer biography, spanning
+  more than one line.
+web:
+  id: example.org
+github:
+  id: johndoe
+  url: "https://github.com/johndoe"
+linkedin:
+  id: johndoe
+  url: "https://www.linkedin.com/in/johndoe"
+orcid:
+  id: 0000-0002-1825-0097
+  url: "https://orcid.org/0000-0002-1825-0097"
+scholar:
+  id: qc6CJjYAAAAJ
+  url: "https://scholar.google.com/citations?user=qc6CJjYAAAAJ"
+cienciavitae:
+  id: 0000-0000-0000-0000
+  url: "https://www.cienciavitae.pt/0000-0000-0000-0000"

@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pdlourenco.github.io/schema/intermediate/v1/publication_overrides.schema.json",
+  "title": "Intermediate publication_overrides.yml (contract v1)",
+  "description": "Per-publication display overrides, keyed by BibTeX cite-key. These become BibTeX fields merged into the generated _bibliography/papers.bib — not a sidecar file (P3/D24). An override whose cite-key is absent from _incoming/papers.src.bib is a loud transform error, since it is almost always a typo or a stale entry.",
+  "type": "object",
+  "propertyNames": {
+    "pattern": "^[A-Za-z0-9_:.#$%&+?<>~/-]+$",
+    "description": "BibTeX cite-key as it appears in the .bib."
+  },
+  "additionalProperties": {
+    "type": "object",
+    "additionalProperties": true,
+    "properties": {
+      "selected": {
+        "type": ["boolean", "null"],
+        "description": "Feeds al-folio's `selected` BibTeX field, which drives the About page's selected-papers list."
+      },
+      "abbr": {
+        "type": ["string", "null"],
+        "description": "Venue abbreviation badge. Can link out via _data/venues.yml."
+      },
+      "preview": {
+        "type": ["string", "null"],
+        "description": "Filename under assets/img/publication_preview/. The asset itself is managed by hand in this repo (D22), and the transform fails loudly if the referenced file does not exist."
+      }
+    }
+  }
+}

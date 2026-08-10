@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pdlourenco.github.io/schema/intermediate/v1/personal.schema.json",
+  "title": "Intermediate personal.yml (contract v1)",
+  "description": "One entry per Personal/* page in the graph, keyed by slug (lowercased, spaces to underscores, & to 'and'). Deliberately open-ended: the Personal page is the site's distinguishing feature and its content is not a fixed schema. Phase 5 renders it from _data/personal.yml.",
+  "type": "object",
+  "propertyNames": {
+    "pattern": "^[a-z0-9_]+$",
+    "description": "Page slug, e.g. music, cycling_and_hiking, diy, reading."
+  },
+  "additionalProperties": { "$ref": "#/$defs/page" },
+  "$defs": {
+    "page": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/propertyValue" },
+      "required": ["title"],
+      "properties": {
+        "title": { "type": "string", "minLength": 1 },
+        "description": { "type": ["string", "null"] },
+        "sections": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^[a-z0-9_]+$",
+            "description": "Slug of a '## Header' in the page, or _root for entries before the first header."
+          },
+          "additionalProperties": {
+            "type": "array",
+            "items": { "$ref": "#/$defs/sectionEntry" }
+          }
+        }
+      },
+      "description": "Page-level properties other than title/description/sections are passed through verbatim, each either a plain string or a {id, url} link object."
+    },
+
+    "sectionEntry": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/propertyValue" },
+      "properties": {
+        "_name": {
+          "type": ["string", "null"],
+          "description": "The block's own title text. Underscore-prefixed because it comes from block content rather than a property."
+        }
+      },
+      "description": "One block under a section header, with its Logseq properties passed through. Third-party embeds (Spotify, SoundCloud, Wikiloc) arrive as link objects and must degrade to a plain link when unavailable — D19."
+    },
+
+    "propertyValue": {
+      "anyOf": [
+        { "type": ["string", "null"] },
+        {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["id"],
+          "properties": {
+            "id": { "type": "string" },
+            "url": { "type": ["string", "null"] }
+          }
+        }
+      ],
+      "description": "A markdown link in the graph becomes {id, url}; anything else stays a string with [[brackets]] stripped."
+    }
+  }
+}

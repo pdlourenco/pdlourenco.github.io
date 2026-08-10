@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pdlourenco.github.io/schema/intermediate/v1/manifest.schema.json",
+  "title": "Intermediate manifest.json (contract v1)",
+  "description": "Export metadata. Two jobs: gate the contract version so the transform never guesses at a shape it does not know, and let the transform detect a truncated or half-copied export instead of transforming it.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "exported_at", "files"],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1,
+      "description": "The contract version this export was produced against. The transform refuses any value it does not know, and refuses an export with no value at all — the plugin does not emit this yet, which is what the legacy-unversioned fixture is for."
+    },
+    "exported_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$",
+      "description": "ISO 8601 timestamp. The pattern is what actually enforces this: `format` is annotation-only in JSON Schema and validates nothing unless a format checker is wired up, so a malformed timestamp would otherwise pass silently. Informational only — it must never affect transform output, or --check would flap on every export (P5)."
+    },
+    "plugin_version": {
+      "type": "string",
+      "description": "Version of logseq-alfolio-export. Informational. Currently hard-coded in the plugin source rather than read from its package.json, so treat a mismatch with the released version as a plugin bug, not a contract violation."
+    },
+    "website": {
+      "type": "string",
+      "description": "The site tag the plugin filtered graph pages on."
+    },
+    "files": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Every file in the export, relative to the export directory, including manifest.json itself and blog/*.md. The transform checks this list against what is actually present in _incoming/ and fails on a mismatch in either direction."
+    },
+    "hashes": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^[a-f0-9]{64}$",
+        "description": "Lowercase hex SHA-256 of the file's bytes."
+      },
+      "description": "Optional but validated when present: path → SHA-256. This is what makes a half-finished sync detectable rather than transformable. The plugin does not emit it yet; because it is optional, adding it needs no version bump."
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": { "type": "integer", "minimum": 0 },
+      "description": "Per-section entry counts. Informational, but useful as a sanity check: a count that disagrees with the parsed file means the export or the copy is inconsistent."
+    }
+  }
+}

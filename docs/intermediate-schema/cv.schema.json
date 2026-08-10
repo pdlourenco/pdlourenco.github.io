@@ -1,0 +1,201 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pdlourenco.github.io/schema/intermediate/v1/cv.schema.json",
+  "title": "Intermediate cv.yml (contract v1)",
+  "description": "Logseq CV export. Note there is no `cv:` wrapper here — that belongs to al-folio's _data/cv.yml and is built by bin/transform.py. Optional fields accept null because the plugin's YAML writer emits nulls inside list items.",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "experience": { "type": "array", "items": { "$ref": "#/$defs/experienceEntry" } },
+    "education": { "type": "array", "items": { "$ref": "#/$defs/educationEntry" } },
+    "awards": { "type": "array", "items": { "$ref": "#/$defs/awardEntry" } },
+    "skills": { "type": "array", "items": { "$ref": "#/$defs/skillEntry" } },
+    "languages": { "type": "array", "items": { "$ref": "#/$defs/languageEntry" } },
+    "research_interests": { "type": "array", "items": { "$ref": "#/$defs/researchInterestEntry" } },
+    "projects": { "type": "array", "items": { "$ref": "#/$defs/projectEntry" } },
+    "teaching": { "$ref": "#/$defs/teaching" }
+  },
+  "$defs": {
+    "nullableString": { "type": ["string", "null"] },
+    "nullableInteger": { "type": ["integer", "null"] },
+    "date": {
+      "type": ["string", "null"],
+      "description": "YYYY, YYYY-MM or YYYY-MM-DD. null means ongoing for a range, or unknown for a point in time.",
+      "pattern": "^[0-9]{4}(-[0-9]{2}(-[0-9]{2})?)?$"
+    },
+    "nullableStringList": {
+      "type": ["array", "null"],
+      "items": { "type": "string" }
+    },
+
+    "experienceEntry": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["position"],
+      "properties": {
+        "position": { "type": "string", "minLength": 1 },
+        "organization": { "$ref": "#/$defs/nullableString" },
+        "location": { "$ref": "#/$defs/nullableString" },
+        "start": { "$ref": "#/$defs/date" },
+        "end": { "$ref": "#/$defs/date" },
+        "description": { "$ref": "#/$defs/nullableString" },
+        "icon": { "$ref": "#/$defs/nullableString" }
+      }
+    },
+
+    "educationEntry": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["degree"],
+      "properties": {
+        "degree": { "type": "string", "minLength": 1 },
+        "field": { "$ref": "#/$defs/nullableString" },
+        "university": {
+          "$ref": "#/$defs/nullableStringList",
+          "description": "A list even when there is one: joint degrees name several institutions."
+        },
+        "school": { "$ref": "#/$defs/nullableString" },
+        "start": { "$ref": "#/$defs/date" },
+        "end": { "$ref": "#/$defs/date" },
+        "grade": { "$ref": "#/$defs/nullableString" },
+        "thesis_title": { "$ref": "#/$defs/nullableString" },
+        "advisors": {
+          "$ref": "#/$defs/nullableStringList",
+          "description": "Pre-rendered display strings, title included: 'Prof. Paulo Oliveira'."
+        },
+        "institute": { "$ref": "#/$defs/nullableString" },
+        "grant": { "$ref": "#/$defs/nullableString" },
+        "award": { "$ref": "#/$defs/nullableString" },
+        "courses": { "$ref": "#/$defs/nullableString" },
+        "icon": { "$ref": "#/$defs/nullableString" }
+      }
+    },
+
+    "awardEntry": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["title"],
+      "properties": {
+        "title": { "type": "string", "minLength": 1 },
+        "awarder": { "$ref": "#/$defs/nullableString" },
+        "date": { "$ref": "#/$defs/date" },
+        "category": { "$ref": "#/$defs/nullableString" },
+        "description": { "$ref": "#/$defs/nullableString" },
+        "icon": { "$ref": "#/$defs/nullableString" }
+      }
+    },
+
+    "skillEntry": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "group": { "$ref": "#/$defs/nullableString" },
+        "level": { "$ref": "#/$defs/nullableInteger" },
+        "icon": { "$ref": "#/$defs/nullableString" }
+      }
+    },
+
+    "languageEntry": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "speaking": { "$ref": "#/$defs/nullableInteger" },
+        "understanding": { "$ref": "#/$defs/nullableInteger" },
+        "writing": { "$ref": "#/$defs/nullableInteger" },
+        "mother_tongue": { "type": "boolean" }
+      }
+    },
+
+    "researchInterestEntry": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "level": { "$ref": "#/$defs/nullableInteger" },
+        "group": { "$ref": "#/$defs/nullableString" },
+        "icon": { "$ref": "#/$defs/nullableString" }
+      }
+    },
+
+    "projectEntry": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "institution": { "$ref": "#/$defs/nullableString" },
+        "category": { "$ref": "#/$defs/nullableString" },
+        "start": { "$ref": "#/$defs/date" },
+        "end": { "$ref": "#/$defs/date" },
+        "description": { "$ref": "#/$defs/nullableString" },
+        "url": { "$ref": "#/$defs/nullableString" },
+        "code": { "$ref": "#/$defs/nullableString" },
+        "keywords": { "$ref": "#/$defs/nullableString" },
+        "importance": {
+          "$ref": "#/$defs/nullableInteger",
+          "description": "Sort key for the CV Projects section (D15): importance, then name."
+        },
+        "icon": { "$ref": "#/$defs/nullableString" }
+      }
+    },
+
+    "teaching": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "supervised_students": { "type": "array", "items": { "$ref": "#/$defs/studentEntry" } },
+        "jury": { "type": "array", "items": { "$ref": "#/$defs/juryEntry" } }
+      }
+    },
+
+    "studentEntry": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "thesis_type": { "$ref": "#/$defs/nullableString" },
+        "degree": { "$ref": "#/$defs/nullableString" },
+        "thesis_title": { "$ref": "#/$defs/nullableString" },
+        "university": { "$ref": "#/$defs/nullableStringList" },
+        "supervisors": {
+          "$ref": "#/$defs/nullableStringList",
+          "description": "Pre-rendered, with the affiliation appended in parentheses when it differs from the student's university."
+        },
+        "start": { "$ref": "#/$defs/date" },
+        "end": { "$ref": "#/$defs/date" },
+        "status": {
+          "type": ["string", "null"],
+          "enum": ["current", "completed", null],
+          "description": "The plugin defaults this to completed when an end date exists, current otherwise."
+        },
+        "grade": { "$ref": "#/$defs/nullableString" },
+        "award": { "$ref": "#/$defs/nullableString" },
+        "description": { "$ref": "#/$defs/nullableString" },
+        "current_position": { "$ref": "#/$defs/nullableString" },
+        "icon": { "$ref": "#/$defs/nullableString" }
+      }
+    },
+
+    "juryEntry": {
+      "allOf": [
+        { "$ref": "#/$defs/studentEntry" },
+        {
+          "type": "object",
+          "properties": {
+            "jury_role": {
+              "type": ["string", "null"],
+              "enum": ["Supervisor", "Rapporteur", "Examiner", null]
+            }
+          }
+        }
+      ],
+      "description": "A student entry plus the jury role. An entry with jury_role Supervisor appears in both supervised_students and jury."
+    }
+  }
+}

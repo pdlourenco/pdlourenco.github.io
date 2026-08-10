@@ -1,0 +1,19 @@
+{
+  "exported_at": "2026-08-10T17:12:44.878Z",
+  "plugin_version": "0.1.0",
+  "website": "plourenco.eu",
+  "files": ["cv.yml", "profile.yml", "personal.yml", "publication_overrides.yml"],
+  "counts": {
+    "experience": 1,
+    "education": 2,
+    "awards": 1,
+    "skills": 2,
+    "languages": 2,
+    "research_interests": 1,
+    "projects": 0,
+    "supervised_students": 0,
+    "jury": 0,
+    "personal_pages": 0,
+    "publication_overrides": 0
+  }
+}

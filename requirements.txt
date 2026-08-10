@@ -10,4 +10,5 @@
 rendercv[full]==2.3
 click==8.4.2 # rendercv 2.3 imports click.core but does not declare it; its CLI is unusable without this
 pyyaml==6.0.3
+jsonschema==4.26.0 # validates _incoming/ against docs/intermediate-schema/ (test/validate_fixtures.py, then bin/transform.py)
 nbconvert==7.17.1
