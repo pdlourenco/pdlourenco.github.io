@@ -210,6 +210,206 @@ upstream small for future upgrades.
 
 ---
 
+## Phase 1 — Ground truth and content decisions
+
+Measured facts live in [`docs/SCHEMA-NOTES.md`](SCHEMA-NOTES.md); this section records the
+choices those facts forced. `seed.md`'s six known-unknowns are closed here (or, for #3,
+deliberately made not to matter).
+
+### D13 — The CV format is RenderCV, not JSONResume _(closes unknown #1)_
+
+`_pages/cv.md` already ships `cv_format: rendercv`, `_data/cv.yml` is the file the pipeline
+targets, and RenderCV is the only one of the two with a PDF path (`render-cv.yml`). JSONResume
+would additionally require re-enabling `jekyll_get_json` and maintaining
+`assets/json/resume.json`. RenderCV version pinned at **2.3** (D7) — that pin _is_ the answer
+to the "exact RenderCV schema version" unknown.
+
+Note that `al_folio_cv` accepts both vocabularies in its section templates, so a RenderCV file
+with the odd JSONResume key still renders. That is tolerance, not a reason to mix: the transform
+emits RenderCV names only, because the PDF path validates strictly.
+
+### D14 — Custom CV sections use `BulletEntry` or `OneLineEntry`, and reuse special-cased titles where possible
+
+Forced by the gem: `render.liquid`'s fallback for a non-special-cased section title renders
+**only** `entry.bullet`, or `entry.label` + `entry.details`. Every other key produces an empty
+card — heading, no content, no warning. `seed.md`'s suggestion of `NormalEntry` for sections
+like "Supervised Students" would render blank on the site while validating fine in RenderCV.
+
+Therefore:
+
+- **Supervised Students**, **Jury** → `BulletEntry` (`bullet:` holding markdown), which also
+  matches `seed.md`'s own advice to push detail into free text rather than invent keys.
+- **Research Interests** → name the section **`Academic Interests`** so it hits the richer
+  `interests.liquid` template (`name` + `keywords` + `icon`) instead of the fallback.
+- Experience, Education, Projects, Awards, Skills, Languages use the special-cased titles
+  exactly as spelled in `SCHEMA-NOTES.md` §1.
+- Location goes in `cv.address.*`, never `cv.location` — the latter is accepted and then
+  silently not rendered.
+
+Phase 3 must assert this: an entry landing in a fallback section without `bullet`/`label` is a
+transform error, not a warning. The site gives no feedback, so the transform has to.
+
+### D15 — The transform sorts every section; the gem's sorting is a coincidence, not a contract
+
+`al_cv_sort_by_date` re-sorts only **Experience + Volunteer** and **Education**. Projects,
+Awards and custom sections render in array order, and `rendercv render` uses array order for
+_everything_. So the transform owns ordering outright:
+
+- experience, education, and any dated custom section: reverse-chronological, ongoing first;
+- projects: `importance` then name (per `seed.md`);
+- tie-break on a stable key so `--check` cannot flap (P5).
+
+Emit `end_date: present` for ongoing entries — the gem recognises `present`/`current`/`ongoing`/`now`,
+and RenderCV accepts `present`.
+
+### D16 — `_teachings/` is used only for courses that have their own page _(closes unknown #2)_
+
+The collection exists and is wired: `{% include courses.liquid %}` groups by `year` then
+`term`, and `layout: course` gives per-course pages with `instructor`/`term`/`location`/`time`/`schedule`.
+
+But `seed.md` puts teaching **inside the CV page**, and `/teaching/` stays off-nav (D8). So:
+the CV page's Teaching section is generated from `_incoming/cv.yml` and is the canonical
+listing; `_teachings/*.md` is generated **only** for courses that warrant a detail page, from
+the same intermediate entries, never hand-maintained in parallel (this is D23/P8 applied to
+teaching). If no course needs a page, the collection stays empty and that is fine.
+
+### D17 — Reading uses the native `_books/` collection, not Goodreads _(closes unknown #4)_
+
+Confirms the plan's provisional call with the mechanics verified: `layout: book-review` for
+entries, `layout: book-shelf` for the index, no third-party dependency, no API that can be
+retired under us. Book entries come from the graph like everything else.
+
+`jekyll-socials` has no built-in `goodreads` key, but that costs less than first recorded: an
+**arbitrary** key whose value is a `{logo, title, url}` hash renders as a social icon (there is
+no literal `custom_social:` keyword — see `SCHEMA-NOTES.md` §2), so the Goodreads profile
+(`7400919-pedro`) can be a first-class icon rather than only an in-page link. Same mechanism
+covers Wikiloc under D19.
+
+### D18 — The Personal page needs no local layout override _(closes unknown #5)_
+
+`page.liquid` renders `{{ content }}` verbatim and Jekyll processes Liquid inside page content,
+so `_pages/personal.md` with `layout: page` can loop over `site.data.personal` inline. A local
+`_layouts/personal.liquid` remains **permitted** (D5) but is no longer _expected_ — Phase 5
+should reach for it only if the inline version becomes unreadable, and record why.
+
+### D19 — Wikiloc is designed around, not verified _(unknown #3 stays open, deliberately)_
+
+`www.wikiloc.com` is blocked by this environment's egress proxy, so whether their per-trail
+iframe still works **could not be tested here**, and I am not going to record a guess as a
+finding. It does not need to block anything: the Personal page's Cycling & Hiking section is
+built link-first — a plain profile/trail link that always works, with an embed added only if
+someone confirms it renders. That is the graceful-degradation rule the plan already requires
+for every third-party embed, so the unknown costs nothing.
+
+### D20 — The export path is `<graph>/.logseq/plugins/storages/…` — `seed.md` is wrong _(closes unknown #6)_
+
+| Source                               | Path                                                                        |
+| ------------------------------------ | --------------------------------------------------------------------------- |
+| `seed.md`                            | `<graph>/assets/storages/logseq-alfolio-export/_logseq_export/` ❌          |
+| plugin `README.md` and **`sync.sh`** | `<graph>/.logseq/plugins/storages/logseq-alfolio-export/_logseq_export/` ✅ |
+
+`sync.sh` is the authority because it is the thing that copies the files. `seed.md` is frozen
+and not corrected in place (per its precedence note); this entry is the correction.
+
+### D21 — `sync.sh` currently violates the pipeline contract and must be changed in the plugin repo
+
+Found while resolving D20, and the most consequential Phase 1 finding: **`sync.sh` copies the
+export straight into `_data/` and `_posts/`**, with `manifest.json` renamed to
+`_data/export_manifest.json`. It does not know `_incoming/` exists.
+
+That is not a cosmetic mismatch. Run against this repo today it would:
+
+1. **overwrite `_data/cv.yml` with intermediate-format YAML.** The site reads
+   `site.data.cv.cv` with the section names in `SCHEMA-NOTES.md` §1 — an intermediate file
+   would render a blank or half-empty CV page with no error;
+2. **write `_posts/` directly from the graph**, skipping the `YYYY-MM-DD-title.md` naming and
+   front-matter mapping Phase 6 owns;
+3. **clobber generated output that CI verifies with `--check`** (D4), so the next PR would fail
+   with a diff nobody authored.
+
+Decision: **`sync.sh` must target `_incoming/` only** — `_incoming/*.yml`,
+`_incoming/manifest.json`, `_incoming/blog/*.md` — and never write `_data/` or `_posts/`. The
+transform is the only writer of al-folio formats. Until the plugin repo is updated, **do not
+run `sync.sh` against this repository**; copy the export directory to `_incoming/` by hand.
+
+This is the one place the plugin/site division of labour is legitimately crossed (P2), so it is
+a coordinated change: Phase 2 opens an issue on `pdlourenco/logseq-alfolio-export` alongside the
+committed JSON Schemas, and the schemas here stay normative regardless of when that lands.
+
+### D22 — Assets are managed by hand in this repo; the intermediate format references them by repo path _(resolves P7)_
+
+The plugin exports YAML and markdown only, and `manifest.json` carries no asset list. Rather
+than widen the contract to ship binaries — which would put photo galleries into the versioned
+API and make every graph edit a binary diff — images live in this repo:
+
+- publication previews: `assets/img/publication_preview/`
+- organisation logos: `assets/img/logos/` + `_data/icon_map.yml` (manual, per `seed.md`)
+- Personal-page galleries: `assets/img/personal/<section>/`
+- blog post images: `assets/img/posts/`
+
+The intermediate YAML references them by **repo-relative path**, and the transform **fails
+loudly if a referenced path does not exist** — that check is what stops a silent broken image.
+`imagemagick` generates responsive widths from `assets/img/` (`SCHEMA-NOTES.md` §6), which is
+another reason to keep everything under that tree.
+
+### D23 — `_data/cv.yml` is the single source for the CV page; collection files are generated only for detail pages _(records P8)_
+
+Restates the plan's P8 decision as binding, now with the collections verified as present
+(`books`, `news`, `projects`, `teachings`). `_projects/*.md` and `_teachings/*.md` are generated
+from the **same** intermediate entries that feed the CV section, only when a per-item page is
+wanted, and are pruned when their source disappears (P6). Neither `/projects/` nor `/teaching/`
+appears in nav (D8) — both render inside the CV page.
+
+### D24 — Bibliography ownership _(records P3)_
+
+Restates the plan's P3 fix as binding: Zotero / Better BibTeX exports to
+**`_incoming/papers.src.bib`**; `bin/transform.py` owns **`_bibliography/papers.bib`** outright
+(generated header, overrides from `_incoming/publication_overrides.yml` merged into the entries
+as BibTeX fields, entry order and untouched fields preserved). Zotero must never be pointed at
+`_bibliography/` again — that was the two-writers bug.
+
+`_data/coauthors.yml` is generated too, keyed as verified in `SCHEMA-NOTES.md` §5: lowercased
+accent-stripped surname → list of `{firstname: [variants], url}`. The list-of-people shape is
+what resolves surname collisions, provided every initial form appearing in the `.bib` is
+emitted.
+
+### D25 — CI lints with the versions the lockfile pins
+
+`prettier.yml` as inherited ran `npm install --save-dev --save-exact prettier @shopify/prettier-plugin-liquid`,
+installing whatever was newest and ignoring `package-lock.json`. It now runs `npm ci`.
+
+This was not hypothetical: it failed PR #3. The runner picked up
+`@shopify/prettier-plugin-liquid 1.11.0` where the lockfile pins `1.10.0`, and 1.11.0's Liquid
+printer reformats fenced ` ```liquid ` blocks. `docs/SCHEMA-NOTES.md` quotes a **deliberately
+truncated** excerpt of `bib.liquid`, so the newer plugin "fixed" it by appending
+`{% endif -%}{%- endfor -%}{%- endif %}` — turning a faithful quotation into code the gem does
+not contain, and the `{% if %}` into a self-closed no-op. A green local check and a red CI check
+on identical bytes.
+
+Two changes, because either alone leaves a hole:
+
+1. **CI uses the lockfile** (`npm ci`), so local and CI check with the same versions. This is
+   D10's rule applied to lint tooling: an unpinned dependency in CI is a build that changes
+   under you.
+2. **Quoted source excerpts are fenced as `text`**, not as their language, whenever they are
+   truncated. A formatter should never be in a position to rewrite a quotation.
+
+### D26 — Enumerate a gem's accepted keys by parsing the gem, not by grepping it
+
+`SCHEMA-NOTES.md` §2 originally listed 47 of `jekyll-socials`' 49 built-in keys and claimed
+unknown keys are silently dropped. Both errors came from method: the list was assembled with a
+regex over patterns like `*_username` / `*_id` / `*_url`, which structurally cannot match
+`academia_edu` or `research_gate_profile`, and the silent-drop claim was inferred from the key
+maps without reading the render loop's `else` branch — which in fact implements the
+custom-social mechanism and raises `NoMethodError` on a scalar value.
+
+Rule for the rest of the pipeline work: when a document's value _is_ its accuracy, enumerate
+from the source of truth mechanically (parse the constant, run the code) and state how it was
+obtained. A grep proves a key exists; it never proves a list is complete. The corrected §2 was
+produced by parsing the gem's constant tables and by executing the failing expression.
+
+---
+
 ## Owner action items (nothing in a commit can do these)
 
 GitHub Pages **cannot** build this site itself: it is gem-based (`theme: al_folio_core` plus
@@ -226,15 +426,21 @@ hand — see `docs/al-folio/INSTALL.md` §Deployment:
 5. Content the site cannot invent: a profile photo (drop it in `assets/img/` and name it in
    `_pages/about.md`), the About bio, and `email:` in `_data/socials.yml`. All three are
    deliberately left blank rather than guessed.
+6. ⚠️ **Do not run the plugin's `sync.sh` against this repository yet.** As written it copies
+   the Logseq export straight into `_data/` and `_posts/`, which overwrites generated files and
+   would leave the CV page rendering intermediate-format YAML it cannot read — see **D21**. Copy
+   the export directory to `_incoming/` by hand until the plugin repo is updated.
 
 Until step 4 happens, `pdlourenco.github.io` keeps serving whatever it serves today; merging
 Phase 0 does not publish anything.
 
 ---
 
-## Inputs recorded for Phase 1
+## Inputs recorded for Phase 1 — consumed
 
-Not decisions — measurements taken while bootstrapping, so Phase 1 does not repeat them:
+Measurements taken while bootstrapping. Phase 1 has now used them: the first bullet fed D13 and
+the Phase 3 gate, the third fed D13/D14. Kept for provenance; the fuller picture is in
+[`docs/SCHEMA-NOTES.md`](SCHEMA-NOTES.md).
 
 - **Stock `_data/cv.yml` validates under RenderCV 2.3.** `rendercv render` reports
   "Validating the input file has finished" with no schema errors, despite the file mixing
