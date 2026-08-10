@@ -129,17 +129,38 @@ def main() -> int:
     else:
         print(f"PASS  legacy-unversioned/ rejected on schema_version ({len(legacy)} error(s))")
 
-    # --- broken/ must report every planted violation ------------------------------
+    # --- broken/ must report every planted violation, each identified by name -----
+    # Asserted individually rather than by count: a bare `len(errors) >= 13` passes even
+    # if a schema regression stops one violation surfacing while another double-reports.
+    # Each tuple is (what the fixture plants, a substring that must appear in the error).
+    PLANTED = [
+        ("cv.yml: experience entry with no position", "'position' is a required property"),
+        ("cv.yml: university as a bare string", "university"),
+        ("cv.yml: unparseable date", "September 2014"),
+        ("cv.yml: level as a string", "level"),
+        ("cv.yml: mother_tongue as a string", "mother_tongue"),
+        ("cv.yml: empty research-interest name", "should be non-empty"),
+        ("cv.yml: status outside the enum", "halfway"),
+        ("cv.yml: jury_role outside the enum", "Chairperson"),
+        ("manifest.json: unknown schema_version", "schema_version"),
+        ("manifest.json: malformed exported_at", "not-a-timestamp"),
+        ("manifest.json: empty files list", "files"),
+        ("manifest.json: malformed hash", "not-a-sha256"),
+        ("manifest.json: negative count", "less than the minimum"),
+    ]
     broken = errors_for(FIXTURES / "broken")
-    planted = 8 + 5  # 8 in cv.yml, 5 in manifest.json
-    if len(broken) < planted:
+    haystack = "\n".join(broken)
+    unreported = [what for what, needle in PLANTED if needle not in haystack]
+    if unreported:
         failures.append(
-            f"broken/ reported {len(broken)} error(s); expected at least {planted}. "
-            "Validation must collect every violation, not stop at the first:"
+            f"broken/ reported {len(broken)} error(s) but these planted violations did not "
+            "surface — a check has silently stopped working, or the fixture was edited:"
         )
+        failures += [f"    {w}" for w in unreported]
+        failures.append("  what was reported:")
         failures += [f"    {e}" for e in broken]
     else:
-        print(f"PASS  broken/ reported {len(broken)} error(s), all violations surfaced")
+        print(f"PASS  broken/ surfaced all {len(PLANTED)} planted violations by name")
 
     if failures:
         print("\nFAIL", file=sys.stderr)

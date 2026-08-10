@@ -449,6 +449,11 @@ Breaking shape changes increment the version; additive optional fields do not �
 entry objects set `additionalProperties: true` and `hashes` is optional-but-validated. A plugin
 that learns a new field cannot break a transform that has not learned it yet.
 
+The same tolerance at `cv.yml`'s **top level** means an unknown or renamed _section_ validates
+cleanly, so **Phase 3 must fail or warn loudly on a top-level section it has no mapping for**.
+Forward-compatibility in the schema is correct; without that guard it would just relocate a
+silent-content-loss bug from the validator into the transform.
+
 ### D30 — Three fixture sets, each with an expectation the validator enforces
 
 `test/fixtures/incoming/` holds `valid/` (must pass, schemas _and_ manifest consistency),
@@ -470,8 +475,15 @@ and enforces nothing unless a format checker is explicitly wired up (and for `da
 
 `exported_at` now carries a `pattern` alongside the `format` annotation. Standing rule: if a
 string constraint must actually hold, express it as `pattern` or `enum`. This is the same class
-as D14 and D31's cousins throughout this project — a validator that looks like it is checking
-something and isn't.
+as D14 (a template that renders nothing for an entry shape it does not recognise) and D25
+(a linter pinned by nobody) — a check that looks like it is checking something and isn't.
+
+### D32 — Filed as one issue upstream, and it does not block us
+
+`pdlourenco/logseq-alfolio-export#1` covers all five gaps: `sync.sh` retargeting to `_incoming/`
+(the damaging one), `schema_version`, hashes, the incomplete `files` list, and the hard-coded
+`plugin_version`. Per the amended Phase 2, the schemas here are normative regardless of when
+that lands, and Phase 3 proceeds against them.
 
 ### D33 — Non-content files are excluded from the build explicitly
 
@@ -487,13 +499,6 @@ directory needs an `exclude:` entry unless it is genuinely site content. Dot-dir
 The general lesson is about verification, not YAML: a PR's `deploy` job builds but does **not**
 publish, so the published tree is only observable after a merge. Post-merge runs and the
 `gh-pages` contents are part of checking a phase, not an afterthought.
-
-### D32 — Filed as one issue upstream, and it does not block us
-
-`pdlourenco/logseq-alfolio-export#1` covers all five gaps: `sync.sh` retargeting to `_incoming/`
-(the damaging one), `schema_version`, hashes, the incomplete `files` list, and the hard-coded
-`plugin_version`. Per the amended Phase 2, the schemas here are normative regardless of when
-that lands, and Phase 3 proceeds against them.
 
 ---
 

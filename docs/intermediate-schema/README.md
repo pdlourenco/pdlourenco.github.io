@@ -57,6 +57,14 @@ A breaking change to any file's shape increments it. Additive, optional fields d
 schemas set `additionalProperties: true` on entry objects precisely so a plugin that learns a
 new field does not break a transform that has not learned it yet.
 
+**That tolerance is deliberate, and it hands one duty to the transform.** `cv.yml`'s _top level_
+is tolerant too, so an unknown or renamed section — a future `talks:`, or a typo'd
+`experiences:` — validates cleanly. If the transform silently maps only the sections it knows,
+that content disappears with no error, which is the failure class this project keeps running into
+(D11, D14, D31). So, as a **named Phase 3 requirement**: `bin/transform.py` must fail, or at
+minimum warn loudly, on a top-level `cv.yml` section it has no mapping for. The schema stays
+permissive; the transform is where the noise belongs.
+
 ## Where the plugin does not match this contract yet
 
 Observed in `logseq-alfolio-export` at the time of writing, and filed upstream:
