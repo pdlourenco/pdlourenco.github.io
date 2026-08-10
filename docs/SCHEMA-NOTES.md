@@ -122,6 +122,33 @@ renders in **array order**.
 Because the PDF path (`rendercv render`) renders in array order and the gem re-sorts only two
 sections, **the transform must emit every section already sorted** — see D15.
 
+### Satisfying the gem and RenderCV at the same time
+
+The two contracts are not identical, and one section genuinely conflicts — but it is resolvable.
+Probed against RenderCV 2.3 by generating one-entry documents and validating each:
+
+| Entry shape                                                                   | RenderCV 2.3 |
+| ----------------------------------------------------------------------------- | ------------ |
+| `{bullet}` (BulletEntry)                                                      | accepted     |
+| `{label, details}` (OneLineEntry)                                             | accepted     |
+| `{name, summary, highlights, dates}` (NormalEntry)                            | accepted     |
+| `{company, position, location, summary, highlights, dates}`                   | accepted     |
+| `{institution, area, degree \| studyType, score, courses, highlights, dates}` | accepted     |
+| `{name, keywords, level, icon}` — al-folio Skills/Interests                   | accepted     |
+| **`{title, awarder, date, summary, url}` — al-folio Awards**                  | **rejected** |
+| `{foo, bar}` — nothing recognisable                                           | rejected     |
+
+**The rule: an entry must carry a key that anchors it to a RenderCV entry type, and RenderCV then
+tolerates al-folio's extra keys alongside.** That is why upstream's stock Awards entries validate
+at all — they carry `authors` next to `title`, which makes them a `PublicationEntry`; drop
+`authors` and the same entry is rejected. Verified by removing one key at a time: only `title`
+and `authors` are load-bearing.
+
+So for Awards, emitting **`name` in addition to `title`** anchors the entry as a `NormalEntry`
+and `title`/`awarder`/`url` ride along — the gem's `awards.liquid` reads `title`/`awarder` and
+RenderCV validates. No trade-off between a good-looking page and a valid PDF is necessary; it
+just has to be deliberate.
+
 ---
 
 ## 2. `_data/socials.yml` (`jekyll-socials 0.0.7`)

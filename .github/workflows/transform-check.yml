@@ -1,0 +1,58 @@
+name: Transform check
+
+# The committed-output model (docs/DECISIONS.md D4): the transform runs on a developer
+# machine and its output is committed; CI only ever verifies. Nothing here writes to the
+# repository. Phase 7 sequences this with the deploy workflow.
+on:
+  push:
+    branches: [master, main]
+    paths:
+      - "_incoming/**"
+      - "_data/**"
+      - "bin/transform.py"
+      - "docs/intermediate-schema/**"
+      - "test/**"
+      - "requirements.txt"
+      - ".github/workflows/transform-check.yml"
+  pull_request:
+    branches: [master, main]
+    paths:
+      - "_incoming/**"
+      - "_data/**"
+      - "bin/transform.py"
+      - "docs/intermediate-schema/**"
+      - "test/**"
+      - "requirements.txt"
+      - ".github/workflows/transform-check.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  transform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: "pip"
+      - name: Install pinned Python deps 🐍
+        # requirements.txt is the single source of pins (D7); no versions restated here.
+        run: pip install -r requirements.txt
+
+      - name: Fixtures match the contract 📐
+        run: python3 test/validate_fixtures.py
+
+      - name: Transform behaves 🔧
+        run: python3 test/test_transform.py
+
+      - name: Committed output is up to date 🔍
+        run: python3 bin/transform.py --check
+
+      - name: Transform is idempotent ♻️
+        # Not asserted — demonstrated: run it for real, then require an empty diff.
+        run: |
+          python3 bin/transform.py
+          git diff --exit-code -- _data _bibliography _projects _teachings _posts

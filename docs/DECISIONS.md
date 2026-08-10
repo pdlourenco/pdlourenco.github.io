@@ -502,6 +502,72 @@ publish, so the published tree is only observable after a merge. Post-merge runs
 
 ---
 
+## Phase 3 — The transform core (CV + socials)
+
+### D34 — One entry can satisfy both contracts; the anchor key is what makes it work
+
+The gem and RenderCV want different keys, and for Awards they genuinely conflict:
+al-folio's `awards.liquid` renders `title`/`awarder`, and RenderCV **rejects**
+`{title, awarder, date, summary, url}` outright.
+
+Probing RenderCV 2.3 one entry at a time found the rule (`docs/SCHEMA-NOTES.md` §1): an entry
+must carry a key that **anchors** it to a RenderCV entry type, after which RenderCV tolerates
+al-folio's extra keys alongside. Upstream's own stock Awards entries validate only because
+`authors` next to `title` makes them a `PublicationEntry` — remove `authors` and the identical
+entry is rejected.
+
+So the transform emits **`name` _and_ `title`** for awards: `name` anchors a `NormalEntry` for
+RenderCV, `title`/`awarder` are what the gem renders. Verified both ways on generated output —
+`rendercv render` validates, and all 11 cards render with content on `/cv/`. There was no need
+to trade a good-looking page against a valid PDF; it just had to be deliberate.
+
+### D35 — Section titles are chosen for the gem's dispatch table, not for prose
+
+`Research Interests` reaches al*folio_cv's bare fallback; **`Academic Interests`** reaches the
+richer `interests.liquid`. Same content, better rendering, so that is the title emitted (D14).
+Conversely `Supervised Students` and `Jury` are deliberately \_not* special-cased titles, so
+their entries are `BulletEntry` — structure lives in the markdown of the bullet, which is what
+`seed.md` suggested for supervisor affiliations anyway.
+
+`SECTION_ORDER` in the transform is asserted against the sections actually built: a mapping
+added without an order entry raises rather than silently dropping the section.
+
+### D36 — Grouped skills and interests; `level` orders, it does not display
+
+`skills.liquid` renders `name` + `keywords`, which reads better as "Programming: Python,
+JavaScript" than as one card per skill, so the transform emits one entry per `group`. The
+graph's `level` is not rendered by that template, so it is used to order members within the
+group rather than being dropped silently. Same for research interests.
+
+### D37 — The version gate fires before content validation, deliberately
+
+`broken/` (schema_version 99) fails on the version gate and never reaches its cv.yml
+violations. That is correct — content cannot be checked against a contract version we do not
+know — but it means that fixture cannot exercise the report-everything path through the
+transform. `test/test_transform.py` therefore builds a **valid-v1 manifest with broken
+content** for that case, and asserts both orderings separately. Found by a test failing for
+the right reason; noted because "the fixture covers it" was wrong.
+
+### D38 — An absent `_incoming/` is success, not failure
+
+`bin/transform.py` with no staged export prints what it did not find and exits 0. That keeps
+`--check` green in CI from the moment it is wired (now) until a real export exists, without
+weakening any check that applies once data is present. The states that _do_ fail: no manifest,
+no `schema_version`, an unknown version, files disagreeing with the manifest list or hashes, a
+schema violation, an unmapped section, an entry the site would render blank, or a
+hand-written file in the way.
+
+### D39 — Deferred from this phase, named so it is not mistaken for done
+
+`personal.yml` (Phase 5) and `publication_overrides.yml` (Phase 4) are validated and then
+reported as "not consumed yet" on every run, rather than ignored. Also deferred: `cv.address`
+(the graph has no location fields — the gem drops scalar `location`, per §1), `cv.label`,
+`social_networks` for the PDF, and `_data/icon_map.yml` + the logo assets D22 calls for — the
+graph's `icon` short keys are carried through the intermediate format but not yet mapped to
+files.
+
+---
+
 ## Owner action items (nothing in a commit can do these)
 
 GitHub Pages **cannot** build this site itself: it is gem-based (`theme: al_folio_core` plus
