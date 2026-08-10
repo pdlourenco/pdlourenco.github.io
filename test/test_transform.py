@@ -109,7 +109,8 @@ def main() -> int:
             projects = sections.get("Projects", [])
             check("projects sort by importance then name",
                   [p.get("name") for p in projects]
-                  == ["Example Rendezvous Simulator", "Weekend Telemetry Dashboard"],
+                  == ["Example Rendezvous Simulator", "Weekend Telemetry Dashboard",
+                      "An Undated Side Project"],
                   str([p.get("name") for p in projects]))
 
             students = sections.get("Supervised Students", [])
@@ -127,6 +128,19 @@ def main() -> int:
                   isinstance(socials.get("cienciavitae"), dict)
                   and "logo" in socials["cienciavitae"],
                   str(socials.get("cienciavitae")))
+
+        # ---- dateless entries are undated, not "ongoing" (review of PR #5) -----------
+            names = [p.get("name") for p in projects]
+            undated = next((p for p in projects if p.get("name") == "An Undated Side Project"), {})
+            check("a dateless entry is not laundered into end_date: present",
+                  "end_date" not in undated and "start_date" not in undated, str(undated))
+            exp_names = [e.get("position") for e in exp]
+            check("a dateless entry sorts last, never above dated work",
+                  exp_names and exp_names[-1] == "Undated Early Role", str(exp_names))
+            undated_exp = next((e for e in exp if e.get("position") == "Undated Early Role"), {})
+            check("a dateless experience carries no invented dates",
+                  "end_date" not in undated_exp and "start_date" not in undated_exp,
+                  str(undated_exp))
 
         # ---- idempotency: run twice, nothing changes ---------------------------------
         before = {p: p.read_bytes() for p in sorted((repo / "_data").rglob("*")) if p.is_file()}
@@ -161,6 +175,46 @@ def main() -> int:
         check("prunes a generated file whose source is gone (P6)", not orphan.exists())
         check("leaves files it does not own", foreign.exists())
         check("reports the prune", "pruned" in pruning.stdout, pruning.stdout.strip())
+
+        # ---- socials must not silently drop a field it cannot map --------------------
+        repo_s = fresh_repo(tmp)
+        staged_s = tmp / "new-network"
+        shutil.copytree(FIXTURES / "valid", staged_s)
+        prof = yaml.safe_load((staged_s / "profile.yml").read_text())
+        prof["mastodon"] = {"id": "@someone@example.social", "url": "https://example.social/@someone"}
+        (staged_s / "profile.yml").write_text(yaml.safe_dump(prof, sort_keys=False, allow_unicode=True))
+        _rehash(staged_s)
+        newnet = transform(staged_s, repo_s)
+        check("an unmapped profile field is loud, not silently dropped",
+              newnet.returncode == 1 and "mastodon" in newnet.stderr, newnet.stderr.strip()[:200])
+
+        repo_w = fresh_repo(tmp)
+        staged_w = tmp / "work-email"
+        shutil.copytree(FIXTURES / "valid", staged_w)
+        prof = yaml.safe_load((staged_w / "profile.yml").read_text())
+        del prof["email_personal"]
+        prof["email_work"] = "work@example.org"
+        (staged_w / "profile.yml").write_text(yaml.safe_dump(prof, sort_keys=False, allow_unicode=True))
+        _rehash(staged_w)
+        transform(staged_w, repo_w)
+        socials_w = yaml.safe_load((repo_w / "_data" / "socials.yml").read_text())
+        check("a work-only email still produces an email link",
+              socials_w.get("email") == "work@example.org", str(socials_w))
+
+        # ---- orphaned output must not pass --check once the export is gone -----------
+        repo_o = fresh_repo(tmp)
+        transform(FIXTURES / "valid", repo_o)
+        gone = tmp / "export-removed"
+        gone.mkdir()
+        (gone / "README.md").write_text("# export deleted\n")
+        orphan_check = transform(gone, repo_o, "--check")
+        check("--check fails when generated files outlive their export",
+              orphan_check.returncode == 1 and "sourceless" in orphan_check.stderr,
+              orphan_check.stderr.strip()[:200])
+        orphan_run = transform(gone, repo_o)
+        check("a real run prunes the sourceless files",
+              orphan_run.returncode == 0 and not (repo_o / "_data" / "cv.yml").exists(),
+              orphan_run.stdout.strip())
 
         # ---- the negative fixtures ---------------------------------------------------
         # broken/ carries schema_version 99, so the version gate fires first — deliberately,

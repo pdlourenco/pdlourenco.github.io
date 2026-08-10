@@ -198,21 +198,36 @@ def val(entry: dict, key: str) -> Any:
     return None if got in (None, "", []) else got
 
 
-def end_date(entry: dict, key: str = "end") -> str | None:
-    """`present` for an ongoing entry — recognised by both the gem and RenderCV (D15)."""
-    return val(entry, key) or "present"
+def end_date(entry: dict) -> str | None:
+    """The end date, or `present` for an ongoing entry — but only if it actually started.
+
+    Mirrors the gem's own rule (date_sorting.rb, SCHEMA-NOTES §1): a start with no end is
+    ongoing; **no dates at all is undated**, not ongoing. Returning `present`
+    unconditionally would present a dateless entry as the person's current position on
+    both the page and the PDF — wrong facts, silently.
+    """
+    end = val(entry, "end")
+    if end:
+        return end
+    return "present" if val(entry, "start") else None
 
 
 def _sort_key_chronological(entry: dict) -> tuple:
-    """Reverse-chronological with ongoing first, stable on name. See D15/P5.
+    """Ongoing first, then reverse-chronological, then undated last; stable on name.
 
-    The gem re-sorts Experience and Education anyway, but `rendercv` renders in array
-    order, so ordering is ours to own — and a defined tie-break is what stops --check
-    flapping between runs.
+    Three ranks rather than two, matching the gem (SCHEMA-NOTES §1): an entry with no
+    dates at all is undated and sorts last — it must not be promoted above dated work.
+    `rendercv` renders in array order, so this ordering is ours to own (D15), and the
+    name tie-break is what stops --check flapping between runs (P5).
     """
-    end = val(entry, "end")
-    ongoing = 0 if end is None else 1  # ongoing sorts first
-    return (ongoing, _neg_date(end), _neg_date(val(entry, "start")), str(val(entry, "name") or ""))
+    start, end = val(entry, "start"), val(entry, "end")
+    if start and not end:
+        rank = 0      # ongoing
+    elif start or end:
+        rank = 1      # dated
+    else:
+        rank = 2      # undated — last, never "current"
+    return (rank, _neg_date(end), _neg_date(start), str(val(entry, "name") or ""))
 
 
 def _neg_date(value: str | None) -> str:
@@ -574,9 +589,16 @@ SOCIALS_CUSTOM = {
 }
 
 
+#: Consumed by the CV header rather than by socials — not "dropped".
+CONSUMED_BY_CV = frozenset({"name_long", "name_short", "initials", "bio_long", "bio_short"})
+
+
 def build_socials(profile: dict) -> dict:
     out: dict[str, Any] = {}
+    consumed: set[str] = set(CONSUMED_BY_CV)
+
     for src, dest in SOCIALS_BUILTIN:
+        consumed.add(src)
         value = val(profile, src)
         if value is None:
             continue
@@ -585,7 +607,15 @@ def build_socials(profile: dict) -> dict:
             out[dest] = value.get("url") if dest.endswith("_url") else value.get("id")
         else:
             out[dest] = value
+
+    # One `email` key exists in jekyll-socials; prefer the personal address, but a
+    # profile carrying only a work address must still produce an email rather than none.
+    consumed.add("email_work")
+    if not out.get("email") and val(profile, "email_work"):
+        out["email"] = profile["email_work"]
+
     for src, (title, logo) in SOCIALS_CUSTOM.items():
+        consumed.add(src)
         value = val(profile, src)
         if not isinstance(value, dict):
             continue
@@ -593,6 +623,22 @@ def build_socials(profile: dict) -> dict:
         if not url:
             continue
         out[src] = {"logo": logo, "title": title, "url": url}
+
+    # profile.schema.json is deliberately open (forward-compat), so a network the plugin
+    # learns validates cleanly — and would then vanish here without a word. Same guard as
+    # build_cv's unmapped-section check: the schema stays permissive, this is where it is loud.
+    unmapped = sorted(k for k in profile if k not in consumed)
+    if unmapped:
+        raise TransformError(
+            "profile.yml has field(s) this transform has no mapping for.",
+            [f"unmapped profile field: {u!r}" for u in unmapped]
+            + [
+                "They would silently not appear on the site. Add them to SOCIALS_BUILTIN",
+                "(if jekyll-socials knows the key — SCHEMA-NOTES.md §2 lists all 49) or to",
+                "SOCIALS_CUSTOM (arbitrary key + {logo,title,url}), or to CONSUMED_BY_CV.",
+            ],
+        )
+
     out = {k: v for k, v in out.items() if v}
     out["rss_icon"] = True
     return out
@@ -686,6 +732,20 @@ def is_staged(incoming: pathlib.Path) -> bool:
 def run(incoming: pathlib.Path, repo: pathlib.Path, check: bool) -> int:
     if not is_staged(incoming):
         shown = incoming.relative_to(repo) if incoming.is_relative_to(repo) else incoming
+        # Header-marked files are evidence that an export existed. Their source is now
+        # gone, so they are orphans (P6) — the one case where this path must be loud
+        # rather than a clean no-op.
+        orphans = prune(set(), [repo / "_data"], repo, check)
+        if orphans:
+            if check:
+                raise TransformError(
+                    f"{shown} holds no export, but generated files are still committed.",
+                    [f"sourceless: {o}" for o in orphans]
+                    + ["Restore the export, or run bin/transform.py to prune them (D4/P6)."],
+                )
+            for o in orphans:
+                print(f"pruned {o} (no export staged)")
+            return 0
         print(
             f"nothing staged: {shown} holds no export, so there is nothing to transform.\n"
             "  This is the expected state until a Logseq export is copied in; see\n"
