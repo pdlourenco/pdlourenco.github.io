@@ -473,6 +473,21 @@ string constraint must actually hold, express it as `pattern` or `enum`. This is
 as D14 and D31's cousins throughout this project — a validator that looks like it is checking
 something and isn't.
 
+### D33 — Non-content files are excluded from the build explicitly
+
+Found by checking the `gh-pages` branch after a merge rather than only the PR's CI: the deployed
+site was serving **`requirements.txt`** at its root. `_config.yml`'s `exclude:` list is
+allow-by-default, upstream's list never mentioned that file, and `docs/` was excluded while
+nothing covered `test/` — so Phase 2's fixtures and validator would have been published too.
+
+Both are excluded now. Standing rule: anything added at the repo root or as a new top-level
+directory needs an `exclude:` entry unless it is genuinely site content. Dot-directories
+(`.github/`, `.agents/`, `.devcontainer/`) are safe — Jekyll skips them by default.
+
+The general lesson is about verification, not YAML: a PR's `deploy` job builds but does **not**
+publish, so the published tree is only observable after a merge. Post-merge runs and the
+`gh-pages` contents are part of checking a phase, not an afterthought.
+
 ### D32 — Filed as one issue upstream, and it does not block us
 
 `pdlourenco/logseq-alfolio-export#1` covers all five gaps: `sync.sh` retargeting to `_incoming/`
