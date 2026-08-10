@@ -349,7 +349,7 @@ API and make every graph edit a binary diff — images live in this repo:
 
 The intermediate YAML references them by **repo-relative path**, and the transform **fails
 loudly if a referenced path does not exist** — that check is what stops a silent broken image.
-`imagemagick` generates responsive widths from `assets/img/` (`SCHEMA-NOTES.md` §6), which is
+`imagemagick` generates responsive widths from `assets/img/` (`SCHEMA-NOTES.md` §7), which is
 another reason to keep everything under that tree.
 
 ### D23 — `_data/cv.yml` is the single source for the CV page; collection files are generated only for detail pages _(records P8)_
@@ -624,6 +624,128 @@ asymmetry is called out in a comment at the branch so it does not read as a bug.
 
 ---
 
+## Phase 4 — Bibliography, publications page, teaching page
+
+Design settled against the **real** Zotero export (106 entries) rather than a fixture, and
+against the owner's stated spec for what the page should contain. Counts below are measured.
+
+### D43 — Authorship decides destination: `author` → publications, `collaborator` → teaching, neither → nowhere
+
+The owner heads an engineering section and keeps the whole section's output in one Zotero
+library, including work he neither authored nor supervised. That work must not appear on the
+site at all. The library already encodes the distinction, so no manual exclusion list is
+needed:
+
+| "Lourenço" appears in | meaning          | destination   | count |
+| --------------------- | ---------------- | ------------- | ----- |
+| `author`              | his own work     | publications  | 74    |
+| `collaborator` only   | he supervised it | teaching page | 19    |
+| neither               | section output   | **excluded**  | 13    |
+
+Verified that the excluded 13 are genuinely other people's supervisions — their
+`collaborator` lists Nuno Paulino, Pedro Batista, Aurélio Araújo — and not misfiled work of
+his. Name matching must normalise the LaTeX cedilla: the export writes `Louren{\c c}o`, so a
+plain `"Lourenço"` substring test finds **1 of 74**. That near-miss is why this rule is
+implemented over a normalised name and asserted by a test.
+
+### D44 — One record per work; a presentation is a note plus links on its paper
+
+Per the owner's WordPress precedent: a paper and the talk that presented it are one entry, not
+two. `bib.liquid` supports this directly (SCHEMA-NOTES §6) — `note` renders a second line
+under the venue, and `slides`/`poster` render buttons. So the transform folds a presentation
+into its paper as `note` + `slides`, and a poster as `poster`.
+
+The merge is safe because it is exact, not fuzzy: all **7** "Paper Presentation" records match
+their paper on normalised title, and **5 of 6** posters do (the sixth is standalone and is
+listed on its own). Paper presentations are therefore never listed separately.
+
+Two records that legitimately survive as duplicates-by-title: an invited lecture given twice
+(IST, 2022-03 and 2025-10) is two events, and a 2024 conference paper later extended into a
+2025 journal submission is two outputs.
+
+### D45 — The generated `.bib` must not carry a `type` field
+
+A BibTeX `type` field shadows the entry type inside `bib.liquid` and silently drops the venue
+line — proved in SCHEMA-NOTES §6, and it would hit **20 of 106** entries here, i.e. most of
+the teaching page. The transform strips `type` and carries the degree in the fields that
+actually render.
+
+This is the same failure class as D14 and D34: the input validates, the build succeeds, and
+the page is quietly wrong. It is caught here by an assertion on generated output rather than
+by looking at the page.
+
+### D46 — Sections come from a `section` field queried per block, not from `group_by`
+
+`scholar.group_by: year` groups _within_ one `{% bibliography %}` call and cannot produce a
+type-ordered page. `{% bibliography --query @*[section=journal] %}` selects on an arbitrary
+field and does work (verified by build). The transform assigns each entry exactly one
+`section` value; the page is one query block per section. `section` is added to
+`filtered_bibtex_keywords` so it does not leak into the "Bib" popup.
+
+### D47 — Page order is the owner's, and an empty section renders nothing
+
+Journal papers · Conference papers · Book chapters · Books · Theses · Preprints — then
+Posters · Talks. Measured: 15 · 23 · 2 · **0** · 2 · 4 — then 1 standalone · 12.
+
+Books is specified by the owner and currently empty. It is **not** emitted as an empty
+heading; the page shows a section only when it has entries, so the category can be filled
+later without a code change.
+
+### D48 — Supervised theses get their own page, sourced from the bib, not the graph
+
+19 distinct supervisions, 2021–2026. They render from `collaborator` per D43, which raises a
+duplication risk worth stating: the Logseq graph _also_ carries
+`cv.teaching.supervised_students`, which Phase 3 already renders on the CV. These are two
+sources for one fact. The CV keeps the graph as its source (it is a CV section), the teaching
+page uses the bib (it needs per-thesis links), and the transform must not invent a third.
+
+Note Zotero stores every supervision as `@phdthesis` regardless of degree — 16 of 19 are
+M.Sc. theses — so the degree comes from the `type` field's _value_ before D45 strips the
+field, never from the entry type.
+
+### D49 — `papers.src.bib` is owner-staged, so the manifest check must tolerate it
+
+The export integrity check (both directions, D-Phase-2) flags any file in `_incoming/` that
+the manifest does not list. `papers.src.bib` comes from Zotero by hand, not from the plugin,
+so it would fail that check the moment it is staged. It is therefore exempted by name, the
+same way `README.md` already is — and the exemption is narrow and asserted, so a plugin that
+later _does_ emit the bibliography still round-trips.
+
+### D50 — A link is emitted only when its asset exists
+
+Zotero's `file` field holds local Windows paths
+(`..\Papers\My Research\Conference\Branco et al_2021_….pdf`), not URLs, and covers only 47 of
+the 74 authored entries. A path like that cannot become a working link, so the transform never
+copies one into `pdf`/`slides`/`poster`. Instead it maps a staged asset under `assets/pdf/`
+and emits the field only if that file is present — an absent PDF means no button, never a
+dead one. Getting the PDFs into the repo is an owner action (see below).
+
+### D51 — Peer-review venues are deferred, pending a source
+
+Not in the Zotero export at all, and the owner's previous site listed them. The intended home
+is a new `peer_review` section in the intermediate contract, which needs a companion-plugin
+change — so the page waits on the plugin rather than being hand-authored into `_data/` and
+becoming a second content source outside Logseq. Recorded here so it is not mistaken for an
+oversight. The owner was offered a hand-authored interim file and did not choose it.
+
+### D52 — Judgment calls on ambiguous records, stated rather than silently applied
+
+Adopted as defaults because they change presentation only, and each is reversible from Zotero:
+
+- the 2025 entry whose venue reads "CEAS Space Journal, submitted" is listed with an explicit
+  submitted marker rather than hidden — the record is real, its status is stated;
+- two untyped `@misc` records duplicating a conference paper (Briz _In-Orbit Assembly_, and
+  _Nonlinear MPC for Attitude Guidance_) are treated as preprints and suppressed in favour of
+  the paper, matching D44;
+- `guerreiroAODCSDevelopmentANTAEUS` is untyped and duplicates nothing, so it cannot be
+  classified — the transform **errors** on it rather than guessing a section. This is the
+  D43/D46 rule working: an entry with no derivable section is a loud failure, not a silent
+  omission.
+
+Data problems only the owner can fix are listed under owner action items.
+
+---
+
 ## Owner action items (nothing in a commit can do these)
 
 GitHub Pages **cannot** build this site itself: it is gem-based (`theme: al_folio_core` plus
@@ -647,6 +769,27 @@ hand — see `docs/al-folio/INSTALL.md` §Deployment:
 
 Until step 4 happens, `pdlourenco.github.io` keeps serving whatever it serves today; merging
 Phase 0 does not publish anything.
+
+### Added by Phase 4 — things in the Zotero library only the owner can fix
+
+7. ⚠️ **Two cite-keys are `::` and `::a`.** Both are 2026 M.Sc. theses he supervises (Maria
+   Fernandes, _System Architecture and Guidance & Control Design…_; Catarina Gomes, _Modelling
+   and Control of Modular and Flexible Large Space Structures_), so both land on the teaching
+   page. Cite-keys are the primary key `publication_overrides.yml` references and appear in
+   page anchors, so they must be fixed **in Zotero** — a generated substitute would change on
+   the next export and silently break any override pointing at it. The transform rejects them
+   with a message naming both entries.
+8. **One supervision is dated 2028** (Cachim, _Verification & Validation of Guidance and
+   Control…_) and **one authored entry has no year** (_Earth-Fixed Trajectory and Map Online
+   Estimation_). Probably a typo and an omission; both are reported, neither is guessed at.
+9. **`guerreiroAODCSDevelopmentANTAEUS` cannot be classified** — an untyped `@misc` that
+   duplicates nothing (D52). Give it a Zotero item type or a `type` value and it files itself.
+10. **PDFs are not in the export.** Zotero's `file` field holds local Windows paths, so the
+    paper/slides/poster buttons the previous site had need the actual files copied to
+    `assets/pdf/` (D50). Naming is matched on the Zotero filename, so copying them across
+    unchanged is enough. Until then those entries simply show no button.
+11. **Peer-review venues have no source yet** (D51) — they need either the companion plugin to
+    emit a `peer_review` section, or a decision to hand-author the list in this repo.
 
 ---
 

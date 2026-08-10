@@ -274,7 +274,62 @@ Own-name entries are italicised rather than linked, driven by `_config.yml`'s
 
 ---
 
-## 6. Responsive images
+## 6. The publications page and `bib.liquid`
+
+Read out of `al_folio_core-1.0.15/_layouts/bib.liquid` and verified by building the site
+against a probe `.bib`. All statements below were **executed**, not inferred.
+
+### ⚠️ A BibTeX `type` field silently shadows the entry type
+
+`bib.liquid` picks the venue line with `{% if entry.type == 'article' %}` … `{% elsif thesis
+contains entry.type %}`. `entry.type` normally holds the **entry type** (`article`,
+`inproceedings`, `phdthesis`). But BibTeX also defines `type` as a legitimate _field_ on
+`@phdthesis`/`@mastersthesis`/`@techreport` — Zotero uses it for `type = {M.Sc. Thesis}` — and
+when present **the field wins**. Proved with two otherwise-identical entries:
+
+| entry                                   | `type` field   | rendered venue line         |
+| --------------------------------------- | -------------- | --------------------------- |
+| `@phdthesis` + `school = {IST}`         | `Ph.D. Thesis` | `2019` — **school dropped** |
+| `@phdthesis` + `school = {IST Control}` | _absent_       | `IST Control, 2018`         |
+
+So `entry.type` became `"Ph.D. Thesis"`, matched no branch, and the school vanished with no
+warning. This affects **20 of the 106 entries** in the real Zotero export (all `@phdthesis`).
+`@misc` is unharmed only by luck: it has no venue branch either way. `type` is **not** in
+`_config.yml`'s `filtered_bibtex_keywords`, correctly — it is a real BibTeX field — so it also
+shows in the "Bib" popup. The transform must therefore not pass `type` through; it carries the
+degree elsewhere (D45).
+
+### Grouping by an arbitrary field works
+
+`{% bibliography --query @*[section=journal] %}` selects on a **non-standard field**, which is
+what makes a type-ordered page possible at all — `scholar.group_by: year` in `_config.yml`
+groups _within_ one `{% bibliography %}` call, and cannot produce Journal/Conference/Chapters
+sections. Verified: four `--query @*[section=…]` blocks each rendered exactly their own
+entries. A field used only for dispatch should be added to `filtered_bibtex_keywords` so it
+does not leak into the "Bib" popup.
+
+### Fields `bib.liquid` renders, confirmed on a real build
+
+- **`note`** → a second `.periodical` line under the venue. This is the slot for a
+  "presented at …" line, which is what lets one record carry its own talk.
+- **`slides`**, **`poster`**, **`pdf`**, **`supp`** → buttons; a bare filename is prefixed with
+  `/assets/pdf/`, and a value containing `://` is used verbatim.
+- **`additional_info`** → appended to the venue line and markdownified — the slot for
+  ", submitted". Cosmetic caveat observed: the template then emits `, ` before the year, so a
+  value ending in a word yields `submitted , 2025` (double space). Prefer `note` if that
+  matters.
+- **`code`**, **`website`**, **`blog`**, **`video`**, **`html`** → buttons.
+- **`abbr`** → venue badge, coloured/linked via `_data/venues.yml`.
+- **`award`** + **`award_name`** → award pill, with `award` also rendered in a print block.
+- **`abstract`** → "Abs" toggle; **`bibtex_show`** → "Bib" toggle; **`doi`**, **`arxiv`**,
+  **`hal`** → link buttons.
+- **`annotation`** → an info popover on the author line.
+- **`preview`** → thumbnail from `assets/img/publication_preview/`, gated on
+  `enable_publication_thumbnails`.
+
+---
+
+## 7. Responsive images
 
 `imagemagick.enabled: true` scans `input_directories: [assets/img/]` for
 `.jpg/.jpeg/.png/.tiff/.gif` and generates widths `480`, `800`, `1400`. It needs the
