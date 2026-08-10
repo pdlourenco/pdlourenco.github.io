@@ -555,7 +555,8 @@ the right reason; noted because "the fixture covers it" was wrong.
 weakening any check that applies once data is present. The states that _do_ fail: no manifest,
 no `schema_version`, an unknown version, files disagreeing with the manifest list or hashes, a
 schema violation, an unmapped section, an entry the site would render blank, or a
-hand-written file in the way.
+hand-written file in the way. **Refined by D42**: nothing-staged is only a no-op when no
+generated files are committed either.
 
 ### D39 — Deferred from this phase, named so it is not mistaken for done
 
@@ -565,6 +566,61 @@ reported as "not consumed yet" on every run, rather than ignored. Also deferred:
 `social_networks` for the PDF, and `_data/icon_map.yml` + the logo assets D22 calls for — the
 graph's `icon` short keys are carried through the intermediate format but not yet mapped to
 files.
+
+### D40 — An entry with no dates is undated, never "present"
+
+`end_date()` emits `present` only when a `start` exists, and `_sort_key_chronological` has
+three ranks — ongoing (start, no end), dated, undated — rather than folding undated in with
+ongoing. This mirrors `al_folio_cv`'s own `date_sorting.rb`, whose rule is that a start with
+no end is ongoing and no dates at all is undated.
+
+The reason this needed a decision rather than a quiet fix: the earlier behavior emitted
+`end_date: present` for a dateless entry and sorted it first, so the CV asserted that an
+undated role was the current one. Nothing downstream would have caught it — RenderCV 2.3
+validates `end_date: present` with no `start_date`, and the gem's undated-sorts-last rule
+never applied because the transform handed it an explicit `"present"` first. **A transform
+that invents a value is worse than one that omits it**, because the invented value is
+type-correct and therefore invisible to every check that isn't a human reading the page.
+This is the concrete case behind the "never invents" line in `bin/transform.py`'s docstring.
+
+Fixture note worth keeping: the dateless entry pinning the _ordering_ has to be an
+**experience**, not a project. `map_projects` sorts by `importance`, so a dateless project
+sorts last for an unrelated reason and passes the assertion without exercising the date rank
+at all. `valid/cv.yml` carries both — a dateless experience for ordering, a dateless project
+for key omission.
+
+### D41 — Unmapped profile fields are an error, matching the unmapped-section guard
+
+`profile.schema.json` is deliberately open (`additionalProperties: true`) so a plugin that
+learns a new network still validates. That makes the transform the only place the gap can be
+caught, exactly as with `cv.yml`'s unmapped sections (the schema is permissive; the transform
+is loud). `build_socials` tracks a `consumed` set — `SOCIALS_BUILTIN` ∪ `SOCIALS_CUSTOM` ∪
+`CONSUMED_BY_CV` (the identity scalars the CV header reads) — and raises on anything left
+over, naming the keys and the three places a mapping can go.
+
+Accounting by name rather than by shape is the point: a key is either listed somewhere or it
+is an error, so there is no `{id, url}`-sniffing heuristic to be wrong about. `email_work` is
+handled as an alias, not a mapping — jekyll-socials has exactly one `email` key, so the
+transform prefers `email_personal` and falls back to `email_work` rather than emitting no
+email at all.
+
+### D42 — Header-marked files are evidence an export existed; D38 is refined accordingly
+
+D38 stands — a repository that never staged anything is a clean no-op — but "nothing staged"
+must not stay quiet when generated files are still committed. Deleting the export after
+`_data/cv.yml` was committed would otherwise leave sourceless generated content served
+indefinitely with `--check` green.
+
+The nothing-staged branch therefore scans the prune roots for `_is_ours()` files. None → the
+D38 no-op, unchanged. Some → error under `--check`, prune in a real run. No state file is
+needed because the evidence is already on disk: the generated header _is_ the record that an
+export once existed.
+
+The two modes deliberately disagree here, which is the one place in the transform where
+`--check` is not "the real run but asserting." `--check` answers _is this commit
+consistent?_ — and a sourceless generated file means no. A real run answers _make it
+consistent_ — and the export is gone, so the output should be too. Both are correct; the
+asymmetry is called out in a comment at the branch so it does not read as a bug.
 
 ---
 
