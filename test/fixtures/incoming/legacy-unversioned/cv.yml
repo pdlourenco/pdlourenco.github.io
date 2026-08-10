@@ -1,0 +1,76 @@
+experience:
+  - position: Researcher
+    organization: University of Porto
+    location: Porto, Portugal
+    start: "2020-01"
+    end: "2023-12"
+    description: null
+    icon: up
+education:
+  - degree: PhD
+    field: Computer Science
+    university:
+      - University of Porto
+    school: null
+    start: "2016-09"
+    end: "2020-12"
+    grade: null
+    thesis_title: Some Thesis Title
+    advisors:
+      - Prof. Paulo Oliveira
+    institute: null
+    grant: null
+    award: null
+    courses: null
+    icon: up
+  - degree: MSc
+    field: Informatics
+    university:
+      - University of Minho
+    school: null
+    start: "2014-09"
+    end: "2016-07"
+    grade: null
+    thesis_title: null
+    advisors: null
+    institute: null
+    grant: null
+    award: null
+    courses: null
+    icon: uminho
+awards:
+  - title: Best Paper Award
+    awarder: University of Porto
+    date: "2021-06"
+    category: Research
+    description: null
+    icon: up
+skills:
+  - name: Python
+    group: Programming
+    level: 5
+    icon: null
+  - name: JavaScript
+    group: Programming
+    level: 4
+    icon: null
+languages:
+  - name: Portuguese
+    speaking: null
+    understanding: null
+    writing: null
+    mother_tongue: true
+  - name: English
+    speaking: 5
+    understanding: 5
+    writing: 5
+    mother_tongue: false
+research_interests:
+  - name: Machine Learning
+    level: 3
+    group: AI
+    icon: null
+projects: []
+teaching:
+  supervised_students: []
+  jury: []

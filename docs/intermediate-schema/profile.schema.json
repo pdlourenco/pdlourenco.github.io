@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pdlourenco.github.io/schema/intermediate/v1/profile.schema.json",
+  "title": "Intermediate profile.yml (contract v1)",
+  "description": "Identity and network profiles. Feeds _data/socials.yml (see ../SCHEMA-NOTES.md §2 for the 49 keys jekyll-socials accepts) and the About page. Every field is optional: the plugin emits only the properties present in the graph, and drops nulls because this file is a mapping.",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "name_long": { "type": "string" },
+    "name_short": { "type": "string" },
+    "initials": { "type": "string" },
+    "email_personal": { "type": "string" },
+    "email_work": { "type": "string" },
+    "bio_short": { "type": "string" },
+    "bio_long": { "type": "string" },
+
+    "web": { "$ref": "#/$defs/link" },
+    "linkedin": { "$ref": "#/$defs/link" },
+    "twitter": { "$ref": "#/$defs/link" },
+    "github": { "$ref": "#/$defs/link" },
+    "instagram": { "$ref": "#/$defs/link" },
+    "lastfm": { "$ref": "#/$defs/link" },
+    "soundcloud": { "$ref": "#/$defs/link" },
+    "orcid": { "$ref": "#/$defs/link" },
+    "scholar": { "$ref": "#/$defs/link" },
+    "researchgate": { "$ref": "#/$defs/link" },
+    "cienciavitae": { "$ref": "#/$defs/link" },
+    "publons": { "$ref": "#/$defs/link" }
+  },
+  "$defs": {
+    "link": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["id"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The username or identifier — the label of the graph's markdown link, or the raw property when it was not a link."
+        },
+        "url": {
+          "type": ["string", "null"],
+          "description": "Absent or null when the graph property was not a markdown link; the transform then builds the URL from the id via jekyll-socials' own template."
+        }
+      },
+      "description": "A network profile as {id, url}. Not every network here has a built-in jekyll-socials key — cienciavitae and publons in particular need the arbitrary-key custom-social form (SCHEMA-NOTES.md §2)."
+    }
+  }
+}

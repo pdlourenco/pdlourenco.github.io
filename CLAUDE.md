@@ -13,6 +13,7 @@ formats by scripts that live _in this repo_.
 | [`docs/IMPLEMENTATION-PLAN.md`](docs/IMPLEMENTATION-PLAN.md) | Critical analysis of the brief, the phased plan, and the review contract every PR is held to.                         |
 | [`docs/DECISIONS.md`](docs/DECISIONS.md)                     | Resolved decisions with rationale.                                                                                    |
 | [`docs/SCHEMA-NOTES.md`](docs/SCHEMA-NOTES.md)               | What this al-folio actually expects, read out of the installed gems. Read before writing any transform mapping.       |
+| [`docs/intermediate-schema/`](docs/intermediate-schema/)     | The plugin↔repo contract, v1: normative JSON Schemas plus the conventions that are easy to get wrong.                 |
 
 **Precedence — later overrides earlier: `seed.md` → `docs/IMPLEMENTATION-PLAN.md` →
 `docs/DECISIONS.md`.** `seed.md` is deliberately not rewritten as decisions supersede it, so
@@ -68,6 +69,10 @@ python3 -m pip install -r requirements.txt   # pinned; rendercv 2.x
 ```
 Logseq graph → plugin → _incoming/*.yml (committed) → bin/transform.py → al-folio formats
 ```
+
+The intermediate YAML is specified in [`docs/intermediate-schema/`](docs/intermediate-schema/)
+(contract v1) with fixtures under `test/fixtures/incoming/`; `python3 test/validate_fixtures.py`
+checks them, including a fixture that must fail and one that must report every violation.
 
 `bin/transform.py` does not exist yet — building it is Phase 3 onward. Its contract:
 idempotent, fails loudly on schema mismatch, marks the files it owns with

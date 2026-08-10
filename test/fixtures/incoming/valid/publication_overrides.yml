@@ -1,0 +1,13 @@
+# FIXTURE — contract v1. Not real data.
+#
+# Cite-keys must exist in _incoming/papers.src.bib; an unknown key is a loud
+# transform error (D24). `preview` names a file under assets/img/publication_preview/
+# that the transform verifies exists (D22).
+doe2021example:
+  selected: true
+  abbr: ICRA
+  preview: doe2021example.gif
+doe2019another:
+  selected: false
+  abbr: null
+  preview: null

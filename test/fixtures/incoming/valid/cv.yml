@@ -1,0 +1,164 @@
+# FIXTURE — contract v1. Not real data.
+#
+# Derived from logseq-alfolio-export's own vitest fixtures driven through its
+# runExport(), then extended to cover the sections its fixtures leave empty
+# (projects, teaching) so every branch of cv.schema.json is exercised.
+# Sample identities are deliberately fictional and match the plugin's fixtures.
+#
+# Note the shape: no `cv:` wrapper, and nulls appear inside list items because the
+# plugin's YAML writer only drops them in mappings. See docs/intermediate-schema/README.md.
+experience:
+  - position: Researcher
+    organization: University of Porto
+    location: Porto, Portugal
+    start: "2020-01"
+    end: "2023-12"
+    description: null
+    icon: up
+  - position: Senior Engineer
+    organization: Example Aerospace
+    location: Lisbon, Portugal
+    start: "2024-01"
+    end: null
+    description: Guidance, navigation and control for on-orbit servicing.
+    icon: exa
+education:
+  - degree: PhD
+    field: Computer Science
+    university:
+      - University of Porto
+    school: null
+    start: "2016-09"
+    end: "2020-12"
+    grade: null
+    thesis_title: Some Thesis Title
+    advisors:
+      - Prof. Paulo Oliveira
+    institute: null
+    grant: null
+    award: null
+    courses: null
+    icon: up
+  - degree: MSc
+    field: Informatics
+    university:
+      - University of Minho
+    school: null
+    start: "2014-09"
+    end: "2016-07"
+    grade: null
+    thesis_title: null
+    advisors: null
+    institute: null
+    grant: null
+    award: null
+    courses: null
+    icon: uminho
+awards:
+  - title: Best Paper Award
+    awarder: University of Porto
+    date: "2021-06"
+    category: Research
+    description: null
+    icon: up
+skills:
+  - name: Python
+    group: Programming
+    level: 5
+    icon: null
+  - name: JavaScript
+    group: Programming
+    level: 4
+    icon: null
+languages:
+  - name: Portuguese
+    speaking: null
+    understanding: null
+    writing: null
+    mother_tongue: true
+  - name: English
+    speaking: 5
+    understanding: 5
+    writing: 5
+    mother_tongue: false
+research_interests:
+  - name: Machine Learning
+    level: 3
+    group: AI
+    icon: null
+projects:
+  - name: Example Rendezvous Simulator
+    institution: Example Aerospace
+    category: work
+    start: "2024-02"
+    end: null
+    description: Six-degree-of-freedom simulator for autonomous rendezvous.
+    url: "https://example.org/rendezvous"
+    code: "https://github.com/example/rendezvous"
+    keywords: GNC, simulation
+    importance: 1
+    icon: exa
+  - name: Weekend Telemetry Dashboard
+    institution: null
+    category: fun
+    start: "2023-05"
+    end: "2023-08"
+    description: null
+    url: null
+    code: "https://github.com/example/telemetry"
+    keywords: null
+    importance: 4
+    icon: null
+teaching:
+  supervised_students:
+    - name: Ana Example
+      thesis_type: MSc
+      degree: MSc in Informatics
+      thesis_title: A Thesis About Something
+      university:
+        - University of Porto
+      supervisors:
+        - Prof. Paulo Oliveira
+        - Prof. Bruno Example (NOVA FCT)
+      start: "2022-09"
+      end: "2023-07"
+      status: completed
+      grade: "18"
+      award: null
+      description: null
+      current_position: Engineer at Example Aerospace
+      icon: up
+    - name: Bruno Example
+      thesis_type: PhD
+      degree: null
+      thesis_title: An Ongoing Thesis
+      university:
+        - University of Minho
+      supervisors:
+        - Prof. Paulo Oliveira
+      start: "2024-10"
+      end: null
+      status: current
+      grade: null
+      award: null
+      description: null
+      current_position: null
+      icon: uminho
+  jury:
+    - name: Carla Example
+      thesis_type: PhD
+      degree: null
+      thesis_title: Yet Another Thesis
+      university:
+        - University of Porto
+      supervisors:
+        - Prof. Someone Else
+      start: null
+      end: "2025-01"
+      status: completed
+      grade: null
+      award: null
+      description: null
+      current_position: null
+      icon: up
+      jury_role: Rapporteur

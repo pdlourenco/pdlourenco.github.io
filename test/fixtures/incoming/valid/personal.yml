@@ -1,0 +1,67 @@
+# FIXTURE — contract v1. Not real data.
+#
+# Covers what the plugin's own fixtures leave empty. Exercises: page-level link
+# objects, the _root pseudo-section for blocks before the first "## Header",
+# section slugging (& -> and), and embeds that must degrade to plain links (D19).
+music:
+  title: Music
+  description: Instruments, bands and listening.
+  lastfm:
+    id: johndoe
+    url: "https://www.last.fm/user/johndoe"
+  sections:
+    _root:
+      - _name: Instruments
+        instruments: guitar, bass, drums
+    bands:
+      - _name: Rainy Days
+        role: guitar
+        spotify:
+          id: Rainy Days
+          url: "https://open.spotify.com/album/0000000000000000000000"
+        bandcamp:
+          id: rainydays
+          url: "https://rainydays.bandcamp.com/"
+    listening:
+      - _name: On repeat
+        album:
+          id: An Album
+          url: "https://open.spotify.com/album/1111111111111111111111"
+cycling_and_hiking:
+  title: Cycling & Hiking
+  description: Trails and long rides.
+  wikiloc:
+    id: johndoe
+    url: "https://www.wikiloc.com/wikiloc/user.do?id=000000"
+  strava:
+    id: "12345678"
+    url: "https://www.strava.com/athletes/12345678"
+  sections:
+    featured_trips:
+      - _name: A Long Ride
+        distance_km: "120"
+        trail:
+          id: A Long Ride
+          url: "https://www.wikiloc.com/trails/a-long-ride-00000000"
+diy:
+  title: DIY
+  description: null
+  sections:
+    tools:
+      - _name: Workshop
+        tools: table saw, router, sander
+    projects:
+      - _name: A Shelf
+        material: oak
+        gallery: assets/img/personal/diy/shelf
+reading:
+  title: Reading
+  description: Books, mostly non-fiction.
+  goodreads:
+    id: 7400919-pedro
+    url: "https://www.goodreads.com/user/show/7400919-pedro"
+  sections:
+    currently_reading:
+      - _name: Some Book Title
+        author: Some Author
+        started: "2026-07"

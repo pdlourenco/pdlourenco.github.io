@@ -410,6 +410,98 @@ produced by parsing the gem's constant tables and by executing the failing expre
 
 ---
 
+## Phase 2 — Intermediate format contract and fixtures
+
+### D27 — The contract was derived by running the plugin, not by reading it
+
+`docs/intermediate-schema/` describes what the plugin **actually emits**: its own vitest
+fixtures were driven through `runExport()` and the files it wrote to sandbox storage captured
+verbatim. That is D26's rule applied to a whole contract, and it immediately paid for itself —
+reading the source alone would have reproduced `seed.md`'s wrong claim about nulls (D28) and
+missed that `cv.yml` has no `cv:` wrapper.
+
+The plugin's fixtures use fictional sample identities (`John Doe`, `University of Porto`); ours
+match them deliberately, so a fixture can be traced across the two repos and no biography is
+invented to fill a test.
+
+### D28 — Optional fields accept both `null` and absent, because the plugin emits both
+
+The plugin's YAML writer drops `null` inside a **mapping** but emits it inside a **list item**.
+So `cv.yml`'s entries carry explicit `description: null`, while `profile.yml`'s `github.url`
+simply disappears when unset. `seed.md` says the intermediate YAML "omits empty properties
+entirely" — true of mappings only.
+
+Every optional field in the schemas therefore accepts `null` as well as being absent, and the
+transform must treat them identically. We asked the plugin **not** to make this uniform: it
+would be a breaking shape change for no gain, and would force a `schema_version` bump.
+
+### D29 — `schema_version` is required, and today's exports fail that gate on purpose
+
+`manifest.json` must carry `schema_version` (integer, currently `1`). The transform refuses a
+version it does not know **and** an export with no version at all, rather than guessing.
+
+The plugin does not emit it yet, so today's real output is invalid against the contract. That is
+recorded rather than papered over: `test/fixtures/incoming/legacy-unversioned/` holds the actual
+current export and the validator asserts it fails **specifically on `schema_version`**. When the
+plugin adds the field, promote that fixture instead of loosening the schema.
+
+Breaking shape changes increment the version; additive optional fields do not — which is why
+entry objects set `additionalProperties: true` and `hashes` is optional-but-validated. A plugin
+that learns a new field cannot break a transform that has not learned it yet.
+
+The same tolerance at `cv.yml`'s **top level** means an unknown or renamed _section_ validates
+cleanly, so **Phase 3 must fail or warn loudly on a top-level section it has no mapping for**.
+Forward-compatibility in the schema is correct; without that guard it would just relocate a
+silent-content-loss bug from the validator into the transform.
+
+### D30 — Three fixture sets, each with an expectation the validator enforces
+
+`test/fixtures/incoming/` holds `valid/` (must pass, schemas _and_ manifest consistency),
+`legacy-unversioned/` (must fail, on `schema_version`), and `broken/` (must surface **every**
+planted violation, not stop at the first — 13 of them across `cv.yml` and `manifest.json`).
+`test/validate_fixtures.py` asserts all three, and Phase 3 moves this validation into
+`bin/transform.py`. `jsonschema` is pinned in `requirements.txt` per D7.
+
+The manifest checks the schema cannot express live in the validator too — files listed vs files
+present in both directions, and SHA-256 comparison — because that is what makes a half-finished
+copy detectable instead of transformable.
+
+### D31 — `format` in JSON Schema validates nothing; use `pattern` when it must hold
+
+Found while writing the negative fixture: `broken/manifest.json`'s `exported_at:
+"not-a-timestamp"` **passed** validation. `format: date-time` is annotation-only in JSON Schema
+and enforces nothing unless a format checker is explicitly wired up (and for `date-time`,
+`jsonschema` needs an extra package even then). The malformed value was accepted silently.
+
+`exported_at` now carries a `pattern` alongside the `format` annotation. Standing rule: if a
+string constraint must actually hold, express it as `pattern` or `enum`. This is the same class
+as D14 (a template that renders nothing for an entry shape it does not recognise) and D25
+(a linter pinned by nobody) — a check that looks like it is checking something and isn't.
+
+### D32 — Filed as one issue upstream, and it does not block us
+
+`pdlourenco/logseq-alfolio-export#1` covers all five gaps: `sync.sh` retargeting to `_incoming/`
+(the damaging one), `schema_version`, hashes, the incomplete `files` list, and the hard-coded
+`plugin_version`. Per the amended Phase 2, the schemas here are normative regardless of when
+that lands, and Phase 3 proceeds against them.
+
+### D33 — Non-content files are excluded from the build explicitly
+
+Found by checking the `gh-pages` branch after a merge rather than only the PR's CI: the deployed
+site was serving **`requirements.txt`** at its root. `_config.yml`'s `exclude:` list is
+allow-by-default, upstream's list never mentioned that file, and `docs/` was excluded while
+nothing covered `test/` — so Phase 2's fixtures and validator would have been published too.
+
+Both are excluded now. Standing rule: anything added at the repo root or as a new top-level
+directory needs an `exclude:` entry unless it is genuinely site content. Dot-directories
+(`.github/`, `.agents/`, `.devcontainer/`) are safe — Jekyll skips them by default.
+
+The general lesson is about verification, not YAML: a PR's `deploy` job builds but does **not**
+publish, so the published tree is only observable after a merge. Post-merge runs and the
+`gh-pages` contents are part of checking a phase, not an afterthought.
+
+---
+
 ## Owner action items (nothing in a commit can do these)
 
 GitHub Pages **cannot** build this site itself: it is gem-based (`theme: al_folio_core` plus
