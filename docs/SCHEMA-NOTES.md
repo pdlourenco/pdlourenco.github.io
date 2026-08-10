@@ -308,6 +308,28 @@ sections. Verified: four `--query @*[section=…]` blocks each rendered exactly 
 entries. A field used only for dispatch should be added to `filtered_bibtex_keywords` so it
 does not leak into the "Bib" popup.
 
+### ⚠️ `address` and `howpublished` render nothing
+
+Zotero writes the place as **`address`**; `bib.liquid` only ever reads **`location`**. Neither
+`address` nor `howpublished` appears anywhere in the template. Verified with three otherwise
+identical `@misc` entries:
+
+| fields present                                 | rendered venue line                              |
+| ---------------------------------------------- | ------------------------------------------------ |
+| `address = {Lisboa, Portugal}`                 | `Jul 2015` — **place lost**                      |
+| `location = {Lisboa, Portugal}`                | `, Lisboa, Portugal, Jul 2016`                   |
+| `location` + `howpublished = {ISR Poster Day}` | `, Lisboa, Portugal, 2017` — **event name lost** |
+
+`address` is present on **83 of 106** entries in the real export, so the transform must
+rename it to `location` or the place silently disappears from the whole site.
+
+Note the **leading comma** in rows 2 and 3: the template builds the line as
+`{{ entrytype }}, {{ location }}`, and `entrytype` is empty for `@misc` (no venue branch
+matches). So an `@misc` with `location` always renders `, Place, Year`. For entry types that
+do have a venue branch (`article`, `inproceedings`, …) the comma is correct. Consequence: for
+poster and talk entries, put the event and place in **`note`**, which renders as its own clean
+line, rather than in `location`.
+
 ### Fields `bib.liquid` renders, confirmed on a real build
 
 - **`note`** → a second `.periodical` line under the venue. This is the slot for a

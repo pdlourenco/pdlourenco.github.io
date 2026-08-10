@@ -648,20 +648,35 @@ his. Name matching must normalise the LaTeX cedilla: the export writes `Louren{\
 plain `"Lourenço"` substring test finds **1 of 74**. That near-miss is why this rule is
 implemented over a normalised name and asserted by a test.
 
-### D44 — One record per work; a presentation is a note plus links on its paper
+### D44 — A paper presentation merges into its paper; a poster never does
 
-Per the owner's WordPress precedent: a paper and the talk that presented it are one entry, not
-two. `bib.liquid` supports this directly (SCHEMA-NOTES §6) — `note` renders a second line
-under the venue, and `slides`/`poster` render buttons. So the transform folds a presentation
-into its paper as `note` + `slides`, and a poster as `poster`.
+Per the owner's WordPress precedent, a paper and the talk that presented it are one entry, not
+two. `bib.liquid` supports this directly (SCHEMA-NOTES §6): `note` renders a second line under
+the venue, and `slides` renders a button. So a "Paper Presentation" folds into its paper as
+`note` + `slides` and is never listed separately.
 
-The merge is safe because it is exact, not fuzzy: all **7** "Paper Presentation" records match
-their paper on normalised title, and **5 of 6** posters do (the sixth is standalone and is
-listed on its own). Paper presentations are therefore never listed separately.
+**A shared title is not evidence of a shared event, and posters are the counter-example.** The
+merge rule is therefore _same title **and** same venue **and** same date_ — not title alone.
+Checked entry by entry:
 
-Two records that legitimately survive as duplicates-by-title: an invited lecture given twice
-(IST, 2022-03 and 2025-10) is two events, and a 2024 conference paper later extended into a
-2025 journal submission is two outputs.
+| record type           | matches its paper on address + date?               | disposition     |
+| --------------------- | -------------------------------------------------- | --------------- |
+| Paper Presentation ×7 | **yes, all 7** (Linz Jul 2015, Crete Jun 2013, …)  | merge           |
+| Poster ×6             | **no, none** — all `Lisboa, Portugal`, other dates | list separately |
+
+Every poster is a Lisbon event distinct from where the paper appeared: the _Globally
+Exponentially Stable Filter_ poster is Lisboa Jul 2015 while its paper is **Linz, Austria**
+Jul 2015; the _Earth-Fixed Trajectory_ poster is 2017 against a 2020 journal article. Decisive
+case: _New Design Techniques_ has **two** posters, May 2016 and Jul 2016, so they are separate
+events even from each other — a title-keyed merge would have silently dropped one of them.
+
+All **6** posters are consequently their own section (D47). This corrects an earlier reading
+that merged 5 of them on title alone; the owner caught it, and the venue/date comparison is
+now the rule the transform implements and a test asserts.
+
+Two further records legitimately survive as duplicates-by-title: an invited lecture given
+twice (IST, 2022-03 and 2025-10) is two events, and a 2024 conference paper later extended
+into a 2025 journal submission is two outputs.
 
 ### D45 — The generated `.bib` must not carry a `type` field
 
@@ -685,7 +700,7 @@ field and does work (verified by build). The transform assigns each entry exactl
 ### D47 — Page order is the owner's, and an empty section renders nothing
 
 Journal papers · Conference papers · Book chapters · Books · Theses · Preprints — then
-Posters · Talks. Measured: 15 · 23 · 2 · **0** · 2 · 4 — then 1 standalone · 12.
+Posters · Talks. Measured: 15 · 23 · 2 · **0** · 2 · 4 — then 6 · 12.
 
 Books is specified by the owner and currently empty. It is **not** emitted as an empty
 heading; the page shows a section only when it has entries, so the category can be filled
@@ -744,6 +759,18 @@ Adopted as defaults because they change presentation only, and each is reversibl
 
 Data problems only the owner can fix are listed under owner action items.
 
+### D53 — `address` is renamed to `location`; posters and talks carry their venue in `note`
+
+`bib.liquid` never reads `address` or `howpublished` (SCHEMA-NOTES §6), and Zotero writes the
+place as `address` on **83 of 106** entries. Renaming it to `location` is therefore not
+cosmetic — without it the place disappears site-wide.
+
+For `@misc` (posters, talks, lectures) the transform puts the event and place in **`note`**
+instead, because an `@misc` with `location` renders a stray leading comma: the template emits
+`{{ entrytype }}, {{ location }}` and `entrytype` is empty for entry types with no venue
+branch. `note` renders as its own line and reads correctly. Papers keep `location`, where the
+comma is right.
+
 ---
 
 ## Owner action items (nothing in a commit can do these)
@@ -790,6 +817,12 @@ Phase 0 does not publish anything.
     unchanged is enough. Until then those entries simply show no button.
 11. **Peer-review venues have no source yet** (D51) — they need either the companion plugin to
     emit a `peer_review` section, or a decision to hand-author the list in this repo.
+12. **None of the 6 posters records which event it was.** Every one carries only
+    `address = {Lisboa, Portugal}` and a date — no `booktitle`, no `publisher`, and
+    `howpublished` would not render even if set (SCHEMA-NOTES §6). They are real, distinct
+    presentations (D44), so they will list as "Poster · Lisboa, Portugal · Jul 2015" until the
+    event name is added in Zotero. Two of them — _New Design Techniques_, May 2016 and Jul 2016
+    — are otherwise indistinguishable on the page.
 
 ---
 
