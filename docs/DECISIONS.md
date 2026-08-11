@@ -771,6 +771,47 @@ instead, because an `@misc` with `location` renders a stray leading comma: the t
 branch. `note` renders as its own line and reads correctly. Papers keep `location`, where the
 comma is right.
 
+### D54 — The source export switches to **Better BibLaTeX**; the mapping is derived from the real file
+
+The first export was Better BibTeX (legacy). Diagnosed from the field census, not guessed:
+`address` 83 / `location` 0, `journal` 15 / `journaltitle` 0, `year` 105 + `month` 87 /
+`date` 0, and `eventtitle` 0 / `venue` 0.
+
+The owner reports that the event names **are** recorded in Zotero for posters, presentations
+and conference papers. They are absent from the export because **plain BibTeX has no field to
+hold them** — there is no `eventtitle` in BibTeX, so BBT discards the meeting/conference name.
+BibLaTeX has `eventtitle` and `venue`, and BBT maps the meeting name into `eventtitle`
+(upstream BBT issues #643, #644, #1195). So this is a translator limitation, not missing data
+and not a transform bug.
+
+BibLaTeX is a net simplification here, which is why it wins over patching:
+
+| datum      | BibTeX (was)                | BibLaTeX       | net effect                    |
+| ---------- | --------------------------- | -------------- | ----------------------------- |
+| event name | **dropped**                 | `eventtitle`   | the fix                       |
+| place      | `address` (renders nothing) | `location`     | **D53's rename becomes moot** |
+| journal    | `journal`                   | `journaltitle` | one rename to add             |
+| date       | `year` + `month`            | `date`         | must be split back out        |
+
+Rejected alternative: keep BibTeX and add `tex.eventtitle:` lines to each item's Zotero
+`Extra` field. BBT does support that (`:` plain-text, `=` raw LaTeX, optionally scoped with a
+`bibtex.`/`biblatex.` prefix), and it is the right tool for a one-off field — but not for ~40
+items, and it would leave the export permanently lossy for anything else BibTeX cannot carry.
+
+**The mapping is not written until the BibLaTeX file exists.** Entry types change
+(presentations become `@unpublished`), and BBT's exact routing of Place vs Event Place is not
+something to infer from documentation. This repo has already been bitten three times by
+plausible-but-wrong assumptions about a format (D14, D34, D45), and D26/D27 exist precisely to
+say: enumerate from the artifact, do not derive from prose.
+
+Two things that de-risk the switch, both worth knowing before it happens:
+
+- **Cite-keys are stable across translators** — BBT pins them per item — so
+  `publication_overrides.yml` keys survive. The malformed `::` / `::a` keys still need fixing
+  in Zotero regardless.
+- **D45 still applies.** BibLaTeX uses `type` for thesis degree (`mathesis`, `phdthesis`), so
+  the `type`-shadowing strip remains necessary.
+
 ---
 
 ## Owner action items (nothing in a commit can do these)
@@ -817,12 +858,16 @@ Phase 0 does not publish anything.
     unchanged is enough. Until then those entries simply show no button.
 11. **Peer-review venues have no source yet** (D51) — they need either the companion plugin to
     emit a `peer_review` section, or a decision to hand-author the list in this repo.
-12. **None of the 6 posters records which event it was.** Every one carries only
-    `address = {Lisboa, Portugal}` and a date — no `booktitle`, no `publisher`, and
-    `howpublished` would not render even if set (SCHEMA-NOTES §6). They are real, distinct
-    presentations (D44), so they will list as "Poster · Lisboa, Portugal · Jul 2015" until the
-    event name is added in Zotero. Two of them — _New Design Techniques_, May 2016 and Jul 2016
-    — are otherwise indistinguishable on the page.
+12. ⚠️ **Re-export the library as Better BibLaTeX**, not Better BibTeX — see **D54**. The event
+    names for posters, presentations and conference papers are already recorded in Zotero;
+    legacy BibTeX simply has no field that can carry them, so BBT drops them on export.
+    This is the one **blocking** item for the publications page. Without event names the 6
+    posters render as "Poster · Lisboa, Portugal · Jul 2015", and the two _New Design
+    Techniques_ posters (May 2016, Jul 2016) are indistinguishable from each other.
+    Two things worth confirming while re-exporting, because BBT routes them to different
+    BibLaTeX fields: whether the conference papers' event name is distinct from the proceedings
+    title already in `booktitle` (26 entries have one), and whether the posters' place is
+    recorded as Zotero's **Event Place** rather than plain Place.
 
 ---
 
