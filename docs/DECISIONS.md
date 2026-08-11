@@ -722,9 +722,14 @@ field, never from the entry type.
 
 The export integrity check (both directions, D-Phase-2) flags any file in `_incoming/` that
 the manifest does not list. `papers.src.bib` comes from Zotero by hand, not from the plugin,
-so it would fail that check the moment it is staged. It is therefore exempted by name, the
-same way `README.md` already is — and the exemption is narrow and asserted, so a plugin that
-later _does_ emit the bibliography still round-trips.
+so it would fail that check the moment it is staged.
+
+**Not implemented yet — Phase 4 does it.** Today `papers.src.bib` appears only in
+`EXPORT_MARKERS`; `_check_export_integrity` still exempts `README.md` alone, so staging a
+Zotero export right now fails the both-directions check with "present but not listed". Phase 4
+will exempt it by name, the same way `README.md` already is, and assert the exemption in a
+test. The exemption must stay narrow, so that a plugin which later _does_ emit the
+bibliography still round-trips.
 
 ### D50 — A link is emitted only when its asset exists
 
