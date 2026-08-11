@@ -48,6 +48,9 @@ jobs:
       - name: Transform behaves 🔧
         run: python3 test/test_transform.py
 
+      - name: Bibliography rules hold 📚
+        run: python3 test/test_bibliography.py
+
       - name: Committed output is up to date 🔍
         run: python3 bin/transform.py --check
 

@@ -708,6 +708,15 @@ later without a code change.
 
 ### D48 — Supervised theses get their own page, sourced from the bib, not the graph
 
+**Supersedes part of D16 and D8.** `seed.md` put teaching inside the CV page and kept
+`/teaching/` off-nav; the owner has since asked for a separate teaching page for supervised
+theses, so `/teaching/` is now `nav: true` and carries the supervision list. What D16 decided
+about `_teachings/` is unchanged: that collection is still only for courses warranting their
+own page, and `{% include courses.liquid %}` (which reads `site.teachings`) can return to this
+page above the supervision list as soon as any course does. Removing the include now costs
+nothing — the collection is empty — but it is the one thing on this page that was not
+replaced by something equivalent, so it is named here rather than left to a silent diff.
+
 19 distinct supervisions, 2021–2026. They render from `collaborator` per D43, which raises a
 duplication risk worth stating: the Logseq graph _also_ carries
 `cv.teaching.supervised_students`, which Phase 3 already renders on the CV. These are two
