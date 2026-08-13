@@ -244,6 +244,23 @@ generation if the plugin exports person data (verify matching rules first).
 **Accept when:** round-trip test proves untouched entries are byte-identical; overrides
 survive a simulated Zotero re-export.
 
+> **[amended]** The shipped pipeline **does not** preserve entries byte-identically, and the
+> acceptance criterion above is superseded. `docs/DECISIONS.md` D43–D54 require the transform
+> to reorder entries (by section, then date), reorder and drop fields, rewrite values
+> (`address`→`location`, `type`→a note), fold presentations into their papers, and exclude
+> work the owner neither authored nor supervised. "Non-destructive field merge, order
+> preserved" was written when `papers.bib` was imagined as a lightly-annotated copy of the
+> Zotero export; it is instead a **derived view** of it.
+>
+> What the original criterion was protecting still holds, and is what to test instead:
+> **the source file is never edited**, and **overrides survive a Zotero re-export** because
+> they live in a separate file keyed by cite-key (D24). The round-trip property is therefore
+> asserted on the _generated_ file — same input, byte-identical output — plus the
+> unknown-cite-key error that catches an override whose entry disappeared.
+>
+> `_data/coauthors.yml` is **not applicable** yet: the plugin exports no person data, so
+> there is nothing to generate it from. Recorded rather than quietly dropped.
+
 ### Phase 5 — Personal page
 
 `personal.yml → _data/personal.yml`, `_pages/personal.md`, layout override only if

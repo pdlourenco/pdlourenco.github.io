@@ -63,6 +63,11 @@ SCHEMA_FOR = {
 #: Files the contract defines but this phase does not consume yet, and what will.
 NOT_YET_CONSUMED: dict[str, str] = {}
 
+#: Everywhere this transform may own a file. Used by the normal prune pass *and* by the
+#: nothing-staged orphan scan — they were separate lists, and the orphan scan's omission of
+#: _bibliography meant a sourceless papers.bib passed --check (PR #5 audit, D42's rule).
+PRUNE_ROOT_NAMES = ("_data", "_bibliography", "_books")
+
 #: Files allowed in _incoming/ without appearing in the plugin's manifest. `README.md` is
 #: ours; `papers.src.bib` is exported from Zotero by hand and the plugin knows nothing about
 #: it (D49). Kept deliberately narrow so a plugin that later emits a bibliography still
@@ -119,6 +124,24 @@ def _validate(name: str, data: Any) -> list[str]:
 def read_incoming(incoming: pathlib.Path) -> dict[str, Any]:
     """Load, validate and version-gate the staged export. Raises TransformError."""
     manifest_path = incoming / "manifest.json"
+
+    # `papers.src.bib` comes from Zotero by hand, on a different cadence from the plugin's
+    # export, so "update the bibliography" must not require re-exporting the whole graph.
+    # When the staged files are only ones the plugin never emits, there is no manifest to
+    # verify against and demanding one would block the workflow entirely (PR #5 audit).
+    if not manifest_path.exists():
+        staged = {p.name for p in incoming.iterdir() if p.is_file()}
+        if staged and staged <= MANIFEST_EXEMPT:
+            data: dict[str, Any] = {}
+            bib_only = incoming / "papers.src.bib"
+            if bib_only.exists():
+                data["papers.src.bib"] = bib_only.read_text(encoding="utf-8")
+            print(
+                "note: no manifest.json — treating this as an owner-staged bibliography "
+                "only. Plugin-exported files would require one (D49)."
+            )
+            return data
+
     if not manifest_path.exists():
         raise TransformError(
             f"{incoming}/manifest.json is missing, so the export cannot be verified.",
@@ -719,12 +742,17 @@ def build_personal(personal: dict) -> dict:
     ordered list so the page does not depend on mapping order surviving YAML round-trips.
     """
     out: dict[str, Any] = {}
-    for slug, page in sorted(personal.items()):
+    # NOT sorted: the graph's order is the author's editorial order, and this is the page
+    # whose whole point is narrative. Mapping insertion order is preserved by the YAML
+    # loader and is deterministic, so --check stays stable without alphabetising (PR #6).
+    for slug, page in personal.items():
         if slug == BOOKS_PAGE:
             continue
         sections = page.get("sections") or {}
         # `_root` holds blocks before the first "## Header" and must lead.
-        ordered = sorted(sections, key=lambda s: (s != "_root", s))
+        # `_root` holds blocks before the first "## Header" and must lead; the rest keep
+        # the order they appear in the graph.
+        ordered = sorted(sections, key=lambda s: s != "_root")
         out[slug] = _compact(
             {
                 "title": val(page, "title"),
@@ -744,7 +772,7 @@ def build_personal(personal: dict) -> dict:
 def _page_links(page: dict) -> list[dict] | None:
     """Page-level link properties (`lastfm:`, `wikiloc:`, …) as a renderable list."""
     links = []
-    for key, value in sorted(page.items()):
+    for key, value in page.items():
         if key in ("title", "description", "sections"):
             continue
         link = link_of(value)
@@ -807,7 +835,14 @@ def build_books(personal: dict) -> dict[str, str]:
                 for k, v in sorted(entry.items())
                 if k != "_name" and k not in BOOK_FIELDS and val(entry, k) is not None
             )
-            out[f"{_slugify(title)}.md"] = _book_page(front, body)
+            name = f"{_slugify(title)}.md"
+            if name in out:
+                problems.append(
+                    f"{title!r} collides with another book on the filename {name!r} — one "
+                    "would silently overwrite the other. Distinguish the titles in the graph."
+                )
+                continue
+            out[name] = _book_page(front, body)
     if problems:
         raise TransformError("the Reading page cannot be turned into _books/ entries.", problems)
     return out
@@ -876,7 +911,13 @@ def build_bibliography(data: dict, repo: pathlib.Path) -> str:
 
 
 def _scholar_identity(repo: pathlib.Path) -> tuple[str, list[str]]:
-    config = yaml.safe_load((repo / "_config.yml").read_text(encoding="utf-8")) or {}
+    config_path = repo / "_config.yml"
+    if not config_path.exists():
+        raise TransformError(
+            f"{config_path} is missing, so the bibliography cannot tell whose work is whose.",
+            ["scholar.last_name/first_name are what D43 keys authorship off."],
+        )
+    config = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
     scholar = config.get("scholar") or {}
     last = scholar.get("last_name")
     first = scholar.get("first_name")
@@ -914,6 +955,10 @@ def serialize(data: dict, source_note: str) -> str:
         width=100,
     )
     return f"{GENERATED_HEADER}\n# source: {source_note}\n{body}"
+
+
+def prune_roots(repo: pathlib.Path) -> list[pathlib.Path]:
+    return [repo / name for name in PRUNE_ROOT_NAMES]
 
 
 def _is_ours(path: pathlib.Path) -> bool:
@@ -994,7 +1039,7 @@ def run(incoming: pathlib.Path, repo: pathlib.Path, check: bool) -> int:
         # Header-marked files are evidence that an export existed. Their source is now
         # gone, so they are orphans (P6) — the one case where this path must be loud
         # rather than a clean no-op.
-        orphans = prune(set(), [repo / "_data"], repo, check)
+        orphans = prune(set(), prune_roots(repo), repo, check)
         if orphans:
             if check:
                 raise TransformError(
@@ -1036,9 +1081,7 @@ def run(incoming: pathlib.Path, repo: pathlib.Path, check: bool) -> int:
         outputs[repo / "_bibliography" / "papers.bib"] = build_bibliography(data, repo)
 
     changed, refused = write_outputs(outputs, repo, check)
-    pruned = prune(
-        set(outputs), [repo / "_data", repo / "_bibliography", repo / "_books"], repo, check
-    )
+    pruned = prune(set(outputs), prune_roots(repo), repo, check)
 
     for name, phase in NOT_YET_CONSUMED.items():
         if name in data:

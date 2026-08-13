@@ -51,4 +51,4 @@ jobs:
           # range for the tag they are about to create, which cannot resolve until
           # the release is published
           # Excluded: 404/blog use Liquid-only links; docs/al-folio/ and docs/reference/ are vendored upstream copies we do not maintain.
-          args: --user-agent 'curl/7.54' --max-retries 3 --retry-wait-time 2 --exclude-path docs/al-folio --exclude-path docs/reference --exclude-path README.md --exclude-path _pages/404.md --exclude-path _pages/blog.md --verbose --no-progress './**/*.md' './**/*.html'
+          args: --user-agent 'curl/7.54' --max-retries 3 --retry-wait-time 2 --exclude-path docs/al-folio --exclude-path docs/reference --exclude-path README.md --exclude-path _pages/404.md --exclude-path _pages/blog.md --exclude-path _pages/personal.md --verbose --no-progress './**/*.md' './**/*.html'

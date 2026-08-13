@@ -3,7 +3,7 @@ layout: page
 permalink: /personal/
 title: personal
 description: Music, cycling and hiking, and things built by hand.
-nav: true
+nav: false # on when an export is staged: Phase 5's export fills _data/personal.yml (D8/D59)
 nav_order: 4
 ---
 

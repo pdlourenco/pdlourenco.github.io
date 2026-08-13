@@ -42,9 +42,12 @@ FIELD_ALIASES = {
 #: Fields never copied to the generated file.
 #: `type` shadows the entry type inside bib.liquid and drops the venue line (D45).
 #: `file` is a local Zotero path, never a URL (D50). The rest are Zotero bookkeeping.
+#: `abstract` and `annotation` are deliberately NOT here: bib.liquid renders them as the
+#: "Abs" toggle and the author-line info popover (SCHEMA-NOTES §6). Dropping them threw away
+#: content the theme displays — caught by the PR #5 post-merge audit.
 DROPPED_FIELDS = frozenset(
     {"type", "file", "copyright", "ids", "langid", "urldate", "keywords", "collaborator",
-     "shorttitle", "annotation", "abstract"}
+     "shorttitle"}
 )
 
 
@@ -184,13 +187,20 @@ def _display_name(name: str) -> str:
 
 
 def is_self(value: str | None, surname: str, forenames: list[str]) -> bool:
-    """Whether a name list contains the site owner."""
+    """Whether a name list contains the site owner.
+
+    Better BibTeX writes `Last, First`, but a Zotero single-field name has no comma at all,
+    and that form silently failed to match before. Both are handled: with a comma the
+    surname is the part before it, without one it is the last whitespace-separated word.
+    """
     want = plain(surname).lower()
-    return any(
-        n.split(",")[0].strip().lower() == want
-        and (not forenames or any(f.lower() in n.lower() for f in forenames))
-        for n in _names(value)
-    )
+    for name in _names(value):
+        last = name.split(",")[0].strip() if "," in name else name.split()[-1:] and name.split()[-1]
+        if str(last).strip().lower() != want:
+            continue
+        if not forenames or any(f.lower() in name.lower() for f in forenames):
+            return True
+    return False
 
 
 # ---------------------------------------------------------------------------------------
@@ -383,8 +393,9 @@ def _escape(value: str) -> str:
     for tex, plain_text in _LATEX_MACROS.items():
         out = out.replace(tex, plain_text)
     # A BibTeX tie is a non-breaking space, but a tilde inside an accent macro (`{\~a}`) is
-    # part of the letter — replacing that one turned "Guimar{\~a}es" into "Guimar aes".
-    out = re.sub(r"(?<![\\{])~", " ", out)
+    # part of the letter, and a tilde in a URL is data. Only ties between word characters
+    # are rewritten — "for~Attitude" yes, "example.org/~user" and "Guimar{\~a}es" no.
+    out = re.sub(r"(?<=[A-Za-z0-9])~(?=[A-Za-z])", " ", out) if "://" not in out else out
     return re.sub(r"\s+", " ", out).strip()
 
 

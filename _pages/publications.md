@@ -3,7 +3,7 @@ layout: page
 permalink: /publications/
 title: publications
 description: Journal and conference papers, book chapters, theses and preprints, followed by posters and talks. Generated from a Zotero library by bin/transform.py.
-nav: true
+nav: false # on when an export is staged: Phase 4's export fills _bibliography/papers.bib (D8/D59)
 nav_order: 2
 ---
 
