@@ -272,8 +272,48 @@ def main() -> int:
         check("no _projects/ page is generated without an explicit page: true marker",
               not list((repo / "_projects").glob("*.md")) if (repo / "_projects").exists() else True)
 
+        # ---- collection pages: the marker works, and collisions are refused ----------
+        import subprocess as _sp
+
+        def _probe(label, snippet, expect_ok, expect=""):
+            probe = _sp.run(
+                [sys.executable, "-c",
+                 "import sys,pathlib;sys.path.insert(0,'bin');import transform as T\n"
+                 "try:\n"
+                 "    print(repr(%s))\n"
+                 "except T.TransformError as e:\n"
+                 "    print(e.render()); raise SystemExit(1)" % snippet],
+                cwd=REPO, capture_output=True, text=True)
+            ok = (probe.returncode == 0) if expect_ok else (probe.returncode == 1)
+            check(label, ok and expect in probe.stdout,
+                  (probe.stdout + probe.stderr).strip()[-200:])
+
+        _probe("a project marked page: true DOES generate a _projects page (D62)",
+               "T.build_collection_pages({'projects': [{'name': 'A Thing', 'page': True}]})"
+               "['_projects']", True, "a-thing.md")
+        _probe("an unmarked project generates nothing",
+               "T.build_collection_pages({'projects': [{'name': 'A Thing'}]})['_projects']",
+               True, "{}")
+        _probe("two same-named page: true projects are refused, not silently merged",
+               "T.build_collection_pages({'projects': ["
+               "{'name': 'Dup', 'page': True}, {'name': 'Dup', 'page': True}]})",
+               False, "collides")
+        _probe("an unmapped teaching subkey is a loud error, not a silent drop",
+               "T.build_cv({'teaching': {'seminars': [{'name': 'x'}]}}, {})",
+               False, "unmapped teaching subkey")
+        _probe("teaching.courses reaches the CV instead of vanishing",
+               "T.build_cv({'teaching': {'courses': [{'name': 'GNC', 'year': 2025}]}}, {})"
+               "['cv']['sections']", True, "Courses")
+        _probe("a post declaring its own layout keeps it",
+               "T.build_posts({'2026-01-01-x.md': '---\\nlayout: distill\\ntitle: X\\n---\\nb'},"
+               " pathlib.Path('.'))", True, "distill")
+        _probe("malformed front matter is a message, not a traceback",
+               "T.build_posts({'2026-01-01-x.md': '---\\ntitle: [unclosed\\n---\\nb'},"
+               " pathlib.Path('.'))", False, "not valid YAML")
+
         # ---- idempotency: run twice, nothing changes ---------------------------------
-        watched = [repo / "_data", repo / "_books"]
+        watched = [repo / name for name in ("_data", "_bibliography", "_books",
+                                             "_posts", "_projects", "_teachings")]
         snapshot = lambda: {  # noqa: E731
             p: p.read_bytes() for d in watched for p in sorted(d.rglob("*")) if p.is_file()
         }

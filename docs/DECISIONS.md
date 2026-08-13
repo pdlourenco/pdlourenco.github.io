@@ -987,6 +987,29 @@ the signal; `cv.schema.json` leaves these objects open, so it validates under co
 without a schema bump. No entry carries it today, so nothing is generated — the mechanism is
 in place and inert, which is the correct state until the graph opts something in.
 
+### D62b — Every generator that derives a filename from a title shares one collision check
+
+The same bug was written twice: a slug collision silently overwriting a page, found in
+`build_books` during the Phase 5 review, fixed there, and then reintroduced weeks later in
+`build_collection_pages` — new code, same mistake. The fix was correct and local, which is
+exactly why it did not transfer.
+
+`add_page()` is now the only way a generated page enters an output dict, and it holds the
+check. The point is not the check itself but its placement: a fix that lives at the one call
+site it was written for is a fix the next call site will not get.
+
+### D62c — `teaching`'s subkeys get the same loud guard as every other mapping level
+
+`cv.yml`'s top-level sections raise on an unmapped key (D-Phase-3) and so do `profile.yml`'s
+fields (D41), but `teaching`'s subkeys did not. A `teaching.courses` list therefore validated
+against the open schema, rendered in no CV section, generated no page without a marker, and
+reported nothing at all — the exact silent-loss shape those other two guards exist to prevent.
+
+Both halves are fixed: unknown subkeys are now an error naming what is known, and `courses`
+is mapped to a **Courses** CV section rather than left to vanish. That closes the gap D16 left
+open — the CV is the canonical teaching listing, so courses had to reach it, with
+`_teachings/*.md` still only for entries wanting their own page (D62).
+
 ### D63 — Post bodies are passed through; only front matter is normalised
 
 The body of a blog post is the author's markdown and is copied verbatim. The transform sets
@@ -994,7 +1017,8 @@ The body of a blog post is the author's markdown and is copied verbatim. The tra
 matter alone, passing through keys `post.liquid` does not know rather than dropping them — the
 layout ignores what it does not recognise, and dropping would lose what the author wrote.
 
-**`layout: post` has to be injected.** `_config.yml` sets no `defaults:` mapping for `_posts`
+**`layout: post` is a default, not an override** — set with `setdefault`, since a post that
+declares `layout: distill` means it. It has to be set at all because `_config.yml` sets no `defaults:` mapping for `_posts`
 (only the `news` collection has a layout default), so a post without an explicit layout
 renders its raw body with no page furniture at all. Verified by building: the generated post
 appears on `/blog/`, and its page renders with the full layout.
