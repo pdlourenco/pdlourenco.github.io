@@ -15,6 +15,8 @@ on:
       - "**.yml"
       - "Gemfile"
       - "Gemfile.lock"
+      - "_incoming/**"
+      - "bin/**"
       - "!.github/workflows/axe.yml"
       - "!.github/workflows/broken-links.yml"
       - "!.github/workflows/deploy-docker-tag.yml"
@@ -42,6 +44,8 @@ on:
       - "**.yml"
       - "Gemfile"
       - "Gemfile.lock"
+      - "_incoming/**"
+      - "bin/**"
       - "!.github/workflows/axe.yml"
       - "!.github/workflows/broken-links.yml"
       - "!.github/workflows/deploy-docker-tag.yml"
@@ -61,7 +65,14 @@ permissions:
   contents: write
 
 jobs:
+  # Generated output must agree with _incoming/ *before* anything is published. Run as a
+  # prerequisite rather than a sibling: as independent workflows they race, and a push with
+  # stale output would publish the stale site while the check went red beside it (D60).
+  verify:
+    uses: ./.github/workflows/transform-check.yml
+
   deploy:
+    needs: verify
     # available images: https://github.com/actions/runner-images#available-images
     runs-on: ubuntu-latest
     steps:
