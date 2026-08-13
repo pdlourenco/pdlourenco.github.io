@@ -972,6 +972,68 @@ that was already handled, and the actual hole was one this repo's own later work
 
 ---
 
+## Phase 6 — Blog and per-item collection pages
+
+### D62 — A per-item page is generated only when the graph asks for one, via `page: true`
+
+D23 and D16 both say `_projects/*.md` and `_teachings/*.md` are generated "only when a
+per-item page is wanted" — and neither says how _wanted_ is signalled. The intermediate
+contract has no such field, so the choice was between inventing a heuristic (has a
+description? has a url? importance above some threshold?) and requiring an explicit marker.
+
+An explicit marker wins, for the same reason D40 gives: a heuristic would generate pages
+nobody asked for and they would look deliberate. `page: true` on a project or course entry is
+the signal; `cv.schema.json` leaves these objects open, so it validates under contract v1
+without a schema bump. No entry carries it today, so nothing is generated — the mechanism is
+in place and inert, which is the correct state until the graph opts something in.
+
+### D62b — Every generator that derives a filename from a title shares one collision check
+
+The same bug was written twice: a slug collision silently overwriting a page, found in
+`build_books` during the Phase 5 review, fixed there, and then reintroduced weeks later in
+`build_collection_pages` — new code, same mistake. The fix was correct and local, which is
+exactly why it did not transfer.
+
+`add_page()` is now the only way a generated page enters an output dict, and it holds the
+check. The point is not the check itself but its placement: a fix that lives at the one call
+site it was written for is a fix the next call site will not get.
+
+### D62c — `teaching`'s subkeys get the same loud guard as every other mapping level
+
+`cv.yml`'s top-level sections raise on an unmapped key (D-Phase-3) and so do `profile.yml`'s
+fields (D41), but `teaching`'s subkeys did not. A `teaching.courses` list therefore validated
+against the open schema, rendered in no CV section, generated no page without a marker, and
+reported nothing at all — the exact silent-loss shape those other two guards exist to prevent.
+
+Both halves are fixed: unknown subkeys are now an error naming what is known, and `courses`
+is mapped to a **Courses** CV section rather than left to vanish. That closes the gap D16 left
+open — the CV is the canonical teaching listing, so courses had to reach it, with
+`_teachings/*.md` still only for entries wanting their own page (D62).
+
+### D63 — Post bodies are passed through; only front matter is normalised
+
+The body of a blog post is the author's markdown and is copied verbatim. The transform sets
+`layout: post` (D-note below), defaults `date` from the filename, and otherwise leaves front
+matter alone, passing through keys `post.liquid` does not know rather than dropping them — the
+layout ignores what it does not recognise, and dropping would lose what the author wrote.
+
+**`layout: post` is a default, not an override** — set with `setdefault`, since a post that
+declares `layout: distill` means it. It has to be set at all because `_config.yml` sets no `defaults:` mapping for `_posts`
+(only the `news` collection has a layout default), so a post without an explicit layout
+renders its raw body with no page furniture at all. Verified by building: the generated post
+appears on `/blog/`, and its page renders with the full layout.
+
+Two things are hard errors rather than best-effort:
+
+- **A filename Jekyll would not recognise as a post.** `YYYY-MM-DD-slug.md` is what makes
+  Jekyll date and publish the file; anything else is not a post and would silently never
+  appear. That is the same invisible-failure class as D14 and D45.
+- **An image reference with no file in this repo** (D22). Blog images are added by hand to
+  `assets/img/posts/`, so a reference the repo cannot satisfy fails the transform instead of
+  rendering a broken image. External URLs and `data:` URIs are left alone.
+
+---
+
 ## Owner action items (nothing in a commit can do these)
 
 GitHub Pages **cannot** build this site itself: it is gem-based (`theme: al_folio_core` plus

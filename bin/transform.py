@@ -66,7 +66,7 @@ NOT_YET_CONSUMED: dict[str, str] = {}
 #: Everywhere this transform may own a file. Used by the normal prune pass *and* by the
 #: nothing-staged orphan scan — they were separate lists, and the orphan scan's omission of
 #: _bibliography meant a sourceless papers.bib passed --check (PR #5 audit, D42's rule).
-PRUNE_ROOT_NAMES = ("_data", "_bibliography", "_books")
+PRUNE_ROOT_NAMES = ("_data", "_bibliography", "_books", "_posts", "_projects", "_teachings")
 
 #: Files allowed in _incoming/ without appearing in the plugin's manifest. `README.md` is
 #: ours; `papers.src.bib` is exported from Zotero by hand and the plugin knows nothing about
@@ -189,6 +189,12 @@ def read_incoming(incoming: pathlib.Path) -> dict[str, Any]:
             continue
         problems += _validate(name, loaded)
         data[name] = loaded
+
+    blog_dir = incoming / "blog"
+    if blog_dir.is_dir():
+        data["blog"] = {
+            p.name: p.read_text(encoding="utf-8") for p in sorted(blog_dir.glob("*.md"))
+        }
 
     bib_path = incoming / "papers.src.bib"
     if bib_path.exists():
@@ -497,6 +503,30 @@ def map_students(entries: list[dict], with_role: bool = False) -> list[dict]:
     return [{"bullet": _student_bullet(e, with_role=with_role)} for e in ordered]
 
 
+def map_courses(entries: list[dict]) -> list[dict]:
+    """Courses taught, as bullets. `Courses` is not a title al_folio_cv special-cases, so
+    the generic branch renders it and only `bullet` survives (D14)."""
+    out = []
+    for e in sorted(entries, key=lambda e: (_neg_date(val(e, "year")), str(val(e, "name") or ""))):
+        tail = _bullet_lines(
+            val(e, "role"), val(e, "institution"), val(e, "term"),
+            str(val(e, "year")) if val(e, "year") else None,
+            val(e, "description"),
+        )
+        head = f"**{val(e, 'name')}**"
+        out.append({"bullet": f"{head} — {tail}" if tail else head})
+    return out
+
+
+#: `teaching`'s subkeys -> (section title, mapper). Anything not listed here is an error,
+#: not a silent drop.
+TEACHING_SUBSECTIONS = {
+    "supervised_students": ("Supervised Students", map_students),
+    "jury": ("Jury", lambda e: map_students(e, with_role=True)),
+    "courses": ("Courses", map_courses),
+}
+
+
 #: intermediate section -> (al-folio section title, mapper). The title choices are
 #: load-bearing: see SPECIAL_CASED_SECTIONS and D14.
 CV_SECTION_MAP: dict[str, tuple[str, Any]] = {
@@ -507,7 +537,7 @@ CV_SECTION_MAP: dict[str, tuple[str, Any]] = {
     "skills": ("Skills", map_skills),
     "languages": ("Languages", map_languages),
     "research_interests": ("Academic Interests", map_research_interests),
-    # `teaching` is a mapping, not a list, and expands into two sections — handled below.
+    # `teaching` is a mapping, not a list, and expands into several sections — see below.
     "teaching": ("", None),
 }
 
@@ -516,6 +546,7 @@ SECTION_ORDER = [
     "Experience",
     "Education",
     "Projects",
+    "Courses",
     "Supervised Students",
     "Jury",
     "Awards",
@@ -550,10 +581,24 @@ def build_cv(cv_in: dict, profile: dict) -> dict:
             continue
         if key == "teaching":
             teaching = cv_in["teaching"] or {}
-            if teaching.get("supervised_students"):
-                sections["Supervised Students"] = map_students(teaching["supervised_students"])
-            if teaching.get("jury"):
-                sections["Jury"] = map_students(teaching["jury"], with_role=True)
+            # The one mapping level that had no unmapped-key guard: a `teaching.courses` list
+            # validated against the open schema, rendered in no section, generated no page
+            # without a marker, and reported nothing. Top-level cv sections and profile
+            # fields both fail loudly here; this now does too.
+            unknown_sub = sorted(set(teaching) - set(TEACHING_SUBSECTIONS))
+            if unknown_sub:
+                raise TransformError(
+                    "cv.yml `teaching` has subkey(s) this transform has no mapping for.",
+                    [f"unmapped teaching subkey: {u!r}" for u in unknown_sub]
+                    + [
+                        f"Known: {', '.join(sorted(TEACHING_SUBSECTIONS))}.",
+                        "They would silently not appear on the site. Add a mapping in",
+                        "TEACHING_SUBSECTIONS, or remove the subkey from the graph.",
+                    ],
+                )
+            for sub, (title, mapper) in TEACHING_SUBSECTIONS.items():
+                if teaching.get(sub):
+                    sections[title] = mapper(teaching[sub])
             continue
         entries = cv_in[key] or []
         if entries:
@@ -684,6 +729,149 @@ def build_socials(profile: dict) -> dict:
 
     out = {k: v for k, v in out.items() if v}
     out["rss_icon"] = True
+    return out
+
+
+# ---------------------------------------------------------------------------------------
+# blog/*.md -> _posts/*.md, and per-item collection pages
+# ---------------------------------------------------------------------------------------
+
+#: Jekyll requires this exact prefix to treat a file as a post and to date it. The plugin
+#: already names files this way; enforcing it here turns a rename into a loud failure rather
+#: than a post that silently never appears.
+POST_NAME = re.compile(r"^(\d{4}-\d{2}-\d{2})-[a-z0-9][a-z0-9-]*\.md$")
+
+#: Markdown/HTML image references, so a broken path fails the transform rather than the page.
+IMAGE_REF = re.compile(
+    r"!\[[^\]]*\]\(([^)\s]+)"           # ![alt](path)
+    r"|<img[^>]+src=[\"']([^\"']+)"       # <img src="path">
+    r"|\{%\s*include\s+figure\.liquid[^%]*?path=[\"']?([^\s\"'%]+)"  # al-folio's own tag
+)
+
+
+def build_posts(blog: dict[str, str], repo: pathlib.Path) -> dict[str, str]:
+    """`_incoming/blog/*.md` -> `_posts/*.md`. Returns {filename: content}.
+
+    The body is passed through untouched: it is the author's markdown, and rewriting it is
+    how a transform starts losing content. Only front matter is normalised, and only enough
+    that Jekyll and `post.liquid` recognise the file.
+    """
+    out, problems = {}, []
+    for name, text in sorted(blog.items()):
+        match = POST_NAME.match(name)
+        if not match:
+            problems.append(
+                f"{name!r} is not a Jekyll post filename (YYYY-MM-DD-slug.md). Jekyll would "
+                "not treat it as a post at all, so it would silently never appear."
+            )
+            continue
+        try:
+            front, body = _split_front_matter(text)
+        except yaml.YAMLError as exc:
+            problems.append(f"{name!r}: front matter is not valid YAML — {exc}")
+            continue
+        if front is None:
+            problems.append(f"{name!r} has no YAML front matter, so it has no title or date.")
+            continue
+        if not front.get("title"):
+            problems.append(f"{name!r} has no title.")
+            continue
+        front.setdefault("date", match.group(1))
+        # `_config.yml` sets no layout default for _posts (only the news collection has one),
+        # so an unstated layout renders the raw body with no page furniture. setdefault, not
+        # assignment: a post that declares `layout: distill` means it.
+        front.setdefault("layout", "post")
+        problems += _check_asset_refs(name, body, repo)
+        out[name] = _markdown_page(front, body)
+    if problems:
+        raise TransformError("the staged blog posts cannot be transformed.", problems)
+    return out
+
+
+def _split_front_matter(text: str) -> tuple[dict | None, str]:
+    if not text.startswith("---"):
+        return None, text
+    parts = text.split("---", 2)
+    if len(parts) < 3:
+        return None, text
+    loaded = yaml.safe_load(parts[1])
+    if loaded is not None and not isinstance(loaded, dict):
+        raise yaml.YAMLError("front matter is not a mapping")
+    return (loaded or {}), parts[2].lstrip("\n")
+
+
+def _check_asset_refs(name: str, body: str, repo: pathlib.Path) -> list[str]:
+    """D22: a referenced image that is not in this repo is a loud failure, not a broken img."""
+    problems = []
+    for match in IMAGE_REF.finditer(body):
+        ref = match.group(1) or match.group(2) or match.group(3) or ""
+        if not ref or "://" in ref or ref.startswith("data:"):
+            continue
+        target = repo / ref.lstrip("/")
+        if not target.exists():
+            problems.append(
+                f"{name}: references {ref!r}, which is not in this repo. Blog images live in "
+                "assets/img/posts/ and are added by hand (D22) — the reference is checked so "
+                "a missing image fails here rather than rendering broken."
+            )
+    return problems
+
+
+def _markdown_page(front: dict, body: str) -> str:
+    lines = ["---", GENERATED_HEADER]
+    for key, value in front.items():
+        dumped = yaml.dump(value, default_flow_style=True, allow_unicode=True).strip()
+        lines.append(f"{key}: {dumped.rstrip('...').strip()}")
+    lines += ["---", ""]
+    if body.strip():
+        lines += [body.rstrip(), ""]
+    return "\n".join(lines)
+
+
+#: A collection item gets its own page only when the graph says so. D23 requires per-item
+#: pages "only when wanted" but never said how that is signalled, and inventing a heuristic
+#: (has a description? has a url?) would generate pages nobody asked for. `page: true` is the
+#: marker; the schema is open, so it validates today (D62).
+PAGE_MARKER = "page"
+
+
+def build_collection_pages(cv: dict) -> dict[str, dict[str, str]]:
+    """`_projects/` and `_teachings/` entries, for items marked `page: true` (D23/D16)."""
+    out: dict[str, dict[str, str]] = {"_projects": {}, "_teachings": {}}
+    problems: list[str] = []
+    for entry in cv.get("projects") or []:
+        if not entry.get(PAGE_MARKER):
+            continue
+        name = val(entry, "name") or "untitled"
+        add_page(out["_projects"], f"{_slugify(name)}.md", _markdown_page(
+            _compact({
+                "layout": "page",
+                "title": name,
+                "description": val(entry, "description"),
+                "category": val(entry, "category"),
+                "importance": val(entry, "importance"),
+                "related_publications": val(entry, "related_publications"),
+            }),
+            "",
+        ), name, "project", problems)
+    teaching = cv.get("teaching") or {}
+    for entry in teaching.get("courses") or []:
+        if not entry.get(PAGE_MARKER):
+            continue
+        name = val(entry, "name") or "untitled"
+        add_page(out["_teachings"], f"{_slugify(name)}.md", _markdown_page(
+            _compact({
+                "layout": "course",
+                "title": name,
+                "year": val(entry, "year"),
+                "term": val(entry, "term"),
+                "instructor": val(entry, "instructor"),
+                "location": val(entry, "location"),
+            }),
+            "",
+        ), name, "course", problems)
+    if problems:
+        raise TransformError("generated collection pages would collide.", problems)
     return out
 
 
@@ -835,14 +1023,8 @@ def build_books(personal: dict) -> dict[str, str]:
                 for k, v in sorted(entry.items())
                 if k != "_name" and k not in BOOK_FIELDS and val(entry, k) is not None
             )
-            name = f"{_slugify(title)}.md"
-            if name in out:
-                problems.append(
-                    f"{title!r} collides with another book on the filename {name!r} — one "
-                    "would silently overwrite the other. Distinguish the titles in the graph."
-                )
-                continue
-            out[name] = _book_page(front, body)
+            add_page(out, f"{_slugify(title)}.md", _book_page(front, body),
+                     title, "book", problems)
     if problems:
         raise TransformError("the Reading page cannot be turned into _books/ entries.", problems)
     return out
@@ -859,6 +1041,24 @@ def _render_value(value: Any) -> str:
     if link:
         return f"[{link['id']}]({link['url']})" if link.get("url") else str(link["id"])
     return str(value)
+
+
+def add_page(out: dict, name: str, content: str, title: str, kind: str,
+             problems: list[str]) -> None:
+    """Add a generated page, refusing to let one silently overwrite another.
+
+    This exists because the same collision bug was written twice: found in `build_books`
+    during the Phase 5 review, fixed there, then reintroduced in `build_collection_pages`.
+    Every generator that derives a filename from a title goes through here now, so the fix
+    cannot be forgotten by the next one.
+    """
+    if name in out:
+        problems.append(
+            f"{kind} {title!r} collides with another on the filename {name!r} — one would "
+            "silently overwrite the other. Distinguish the titles in the graph."
+        )
+        return
+    out[name] = content
 
 
 def _slugify(text: str) -> str:
@@ -1077,6 +1277,13 @@ def run(incoming: pathlib.Path, repo: pathlib.Path, check: bool) -> int:
         )
         for name, content in build_books(personal).items():
             outputs[repo / "_books" / name] = content
+    if "blog" in data:
+        for name, content in build_posts(data["blog"], repo).items():
+            outputs[repo / "_posts" / name] = content
+    if "cv.yml" in data:
+        for folder, pages in build_collection_pages(data["cv.yml"]).items():
+            for name, content in pages.items():
+                outputs[repo / folder / name] = content
     if "papers.src.bib" in data:
         outputs[repo / "_bibliography" / "papers.bib"] = build_bibliography(data, repo)
 
