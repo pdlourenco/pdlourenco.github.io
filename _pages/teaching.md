@@ -3,7 +3,7 @@ layout: page
 permalink: /teaching/
 title: teaching
 description: Theses supervised or co-supervised, newest first. Generated from a Zotero library by bin/transform.py.
-nav: true
+nav: false # on when an export is staged: the same export fills the supervision list (D8/D59)
 nav_order: 3
 ---
 

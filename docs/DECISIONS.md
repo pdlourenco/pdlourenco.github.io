@@ -373,6 +373,21 @@ accent-stripped surname → list of `{firstname: [variants], url}`. The list-of-
 what resolves surname collisions, provided every initial form appearing in the `.bib` is
 emitted.
 
+> **Amended by Phase 4 (D43–D54).** "Entry order and untouched fields preserved" no longer
+> describes the implementation, and the plan's matching acceptance criterion is superseded
+> there too. `papers.bib` is a **derived view**, not an annotated copy: entries are reordered
+> by section and date, fields are reordered and some dropped, values are rewritten, and
+> entries are folded or excluded outright. That was not a drift — D43–D54 each require it, and
+> a copy-with-annotations could not produce the page the owner asked for.
+>
+> **D24's core is untouched and is the part that mattered:** Zotero writes only
+> `_incoming/papers.src.bib`, the transform owns `_bibliography/papers.bib` outright, and
+> overrides survive a re-export because they live in a separate file keyed by cite-key.
+>
+> `_data/coauthors.yml` is **not generated yet**: the plugin exports no person data, so there
+> is no source for the `url` each entry needs. Named here so it is not mistaken for done —
+> the `SCHEMA-NOTES.md` §5 shape stays correct for when it is.
+
 ### D25 — CI lints with the versions the lockfile pins
 
 `prettier.yml` as inherited ran `npm install --save-dev --save-exact prettier @shopify/prettier-plugin-liquid`,
@@ -702,9 +717,12 @@ field and does work (verified by build). The transform assigns each entry exactl
 Journal papers · Conference papers · Book chapters · Books · Theses · Preprints — then
 Posters · Talks. Measured: 15 · 23 · 2 · **0** · 2 · 4 — then 6 · 12.
 
-Books is specified by the owner and currently empty. It is **not** emitted as an empty
-heading; the page shows a section only when it has entries, so the category can be filled
-later without a code change.
+Books is specified by the owner and currently empty, and its block is **commented out** in
+`_pages/publications.md` so no empty heading renders. To be precise about the mechanism, since
+an earlier wording of this entry overstated it: the headings are **hard-coded in the page**,
+one `{% bibliography %}` block each. A section whose query matches nothing still renders its
+heading. Books is the only one handled, because it is the only one expected to stay empty;
+if another section can empty out, its block needs the same treatment.
 
 ### D48 — Supervised theses get their own page, sourced from the bib, not the graph
 
@@ -733,12 +751,28 @@ The export integrity check (both directions, D-Phase-2) flags any file in `_inco
 the manifest does not list. `papers.src.bib` comes from Zotero by hand, not from the plugin,
 so it would fail that check the moment it is staged.
 
-**Not implemented yet — Phase 4 does it.** Today `papers.src.bib` appears only in
-`EXPORT_MARKERS`; `_check_export_integrity` still exempts `README.md` alone, so staging a
-Zotero export right now fails the both-directions check with "present but not listed". Phase 4
-will exempt it by name, the same way `README.md` already is, and assert the exemption in a
-test. The exemption must stay narrow, so that a plugin which later _does_ emit the
-bibliography still round-trips.
+**Implemented.** `MANIFEST_EXEMPT = {README.md, papers.src.bib}` is what
+`_check_export_integrity` skips, and two tests assert it: one stages a plugin export and a
+bibliography together, one stages a bibliography alone. The exemption stays narrow, so a
+plugin that later _does_ emit the bibliography still round-trips through the integrity check.
+
+This entry was wrong twice, in opposite directions — first describing the exemption as done
+before it was, then (corrected in the same PR that implemented it) as pending after it was.
+The lesson is the one D39 already encodes: a decision that describes code has to be re-read
+when that code lands, not only when it is planned.
+
+### D49b — A bibliography can be staged without re-exporting the graph
+
+`papers.src.bib` comes from Zotero on the owner's cadence; the manifest comes from the plugin
+on the graph's cadence. Requiring a manifest to process the bibliography therefore made
+"update the publication list" imply "re-export the whole graph", which is not a workflow
+anyone would want and blocked filling the two pages that need it.
+
+So: when every staged file is one the plugin never emits (`MANIFEST_EXEMPT`), the manifest is
+not required and the transform processes what is there, saying so on stdout. A single
+plugin-exported file present alongside brings the full integrity check back. This is narrow on
+purpose — the manifest is the only defence against a partial copy of a plugin export, and that
+defence is untouched.
 
 ### D50 — A link is emitted only when its asset exists
 
@@ -828,6 +862,66 @@ Two things that de-risk the switch, both worth knowing before it happens:
 
 ---
 
+## Phase 5 — Personal page and the bookshelf
+
+### D59 — A page joins the nav when it has content, not when its code lands
+
+Publications, teaching and personal all shipped `nav: true` while their generated data was
+still absent, so the site served three nav entries leading to empty headings. D8 already said
+nav flips per phase; what was missing is that the trigger is **content**, not code.
+
+All three are `nav: false` with a one-line reason in their front matter, and they flip on when
+an export is staged. This is the same rule as D3's no-invented-content: an empty page reached
+from the nav is a promise the site cannot keep. D48's supersession of D8 for `/teaching/`
+stands — the owner asked for the page; it just does not go in the nav while it is empty.
+
+### D55 — The Personal page renders from data inline; no layout override was needed
+
+D18 predicted this and it held: `_pages/personal.md` loops over `site.data.personal` with
+`layout: page`, because `page.liquid` renders `{{ content }}` verbatim and Jekyll runs Liquid
+inside page content. A local `_layouts/personal.liquid` stays permitted (D5) and unused.
+
+The transform deliberately does **not** enumerate the properties of a Personal entry. The
+contract is open on purpose — this page is the site's distinguishing feature and its content
+is not a fixed schema — so properties are carried through and the page renders whatever is
+there. The only transformation is structural: `sections` becomes an ordered list, with the
+`_root` pseudo-section first, so rendering does not depend on mapping order surviving a YAML
+round-trip.
+
+### D56 — Reading is not rendered twice
+
+`personal.yml`'s `reading` page becomes `_books/*.md` and nothing else; the Personal page
+links to `/books/` rather than repeating the list. Same rule as D48: one fact, one source.
+
+### D57 — Front matter must open on line 1, so the ownership marker moves inside it
+
+Generated files carry `GENERATED_HEADER` on their first line, and `_is_ours()` reads that line
+to decide what the transform owns. That breaks for a Markdown file: Jekyll only parses front
+matter when `---` is the very first thing in the file, so a marker above it silently costs the
+page its layout — the `_books/` pages rendered unstyled until this was caught by building the
+site.
+
+Resolution: for front-matter files the marker is a **YAML comment on line 2**, inside the
+block, and `_is_ours()` scans the first three lines instead of only the first. Ownership,
+pruning and `--check` behave identically; only the marker's position moved.
+
+### D58 — Book dates are padded to a full date, and status is a closed set
+
+`book-shelf.liquid` groups on `item.started | date: '%Y'`. Liquid's `date` filter cannot parse
+a partial date and returns its input unchanged, so a `2026-07` start rendered the year
+_heading_ as "2026-07". Date-like book fields are padded (`2026` → `2026-01-01`,
+`2026-07` → `2026-07-01`).
+
+The shelf also colours the caption from a closed set — `abandoned, finished, interested,
+paused, queued, reading, reread` — and renders anything else as `UNCATEGORIZED` with no
+warning. So an unrecognised `status` is a transform error, and a missing one is inferred from
+the section header (`currently_reading` → `reading`).
+
+Both were found by rendering the page, not by reading the template. That is now the third
+Phase where a build caught something a read did not (D14, D45, and this).
+
+---
+
 ## Owner action items (nothing in a commit can do these)
 
 GitHub Pages **cannot** build this site itself: it is gem-based (`theme: al_folio_core` plus
@@ -870,6 +964,12 @@ Phase 0 does not publish anything.
     paper/slides/poster buttons the previous site had need the actual files copied to
     `assets/pdf/` (D50). Naming is matched on the Zotero filename, so copying them across
     unchanged is enough. Until then those entries simply show no button.
+    11b. **The first real staging will refuse to write `_bibliography/papers.bib`, and that is
+    correct.** That file is still the Phase 0 placeholder, which has no generated header, so
+    the transform refuses to overwrite it rather than clobbering what might be hand-written
+    content. Delete the placeholder (or move it aside) once and the transform owns the file
+    from then on. Noted so it does not read as a bug on first run.
+
 11. **Peer-review venues have no source yet** (D51) — they need either the companion plugin to
     emit a `peer_review` section, or a decision to hand-author the list in this repo.
 12. ⚠️ **Re-export the library as Better BibLaTeX**, not Better BibTeX — see **D54**. The event

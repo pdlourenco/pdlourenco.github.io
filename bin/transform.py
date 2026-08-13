@@ -27,6 +27,7 @@ import hashlib
 import io
 import json
 import pathlib
+import re
 import sys
 from typing import Any
 
@@ -60,7 +61,12 @@ SCHEMA_FOR = {
 }
 
 #: Files the contract defines but this phase does not consume yet, and what will.
-NOT_YET_CONSUMED = {"personal.yml": "Phase 5"}
+NOT_YET_CONSUMED: dict[str, str] = {}
+
+#: Everywhere this transform may own a file. Used by the normal prune pass *and* by the
+#: nothing-staged orphan scan — they were separate lists, and the orphan scan's omission of
+#: _bibliography meant a sourceless papers.bib passed --check (PR #5 audit, D42's rule).
+PRUNE_ROOT_NAMES = ("_data", "_bibliography", "_books")
 
 #: Files allowed in _incoming/ without appearing in the plugin's manifest. `README.md` is
 #: ours; `papers.src.bib` is exported from Zotero by hand and the plugin knows nothing about
@@ -118,6 +124,24 @@ def _validate(name: str, data: Any) -> list[str]:
 def read_incoming(incoming: pathlib.Path) -> dict[str, Any]:
     """Load, validate and version-gate the staged export. Raises TransformError."""
     manifest_path = incoming / "manifest.json"
+
+    # `papers.src.bib` comes from Zotero by hand, on a different cadence from the plugin's
+    # export, so "update the bibliography" must not require re-exporting the whole graph.
+    # When the staged files are only ones the plugin never emits, there is no manifest to
+    # verify against and demanding one would block the workflow entirely (PR #5 audit).
+    if not manifest_path.exists():
+        staged = {p.name for p in incoming.iterdir() if p.is_file()}
+        if staged and staged <= MANIFEST_EXEMPT:
+            data: dict[str, Any] = {}
+            bib_only = incoming / "papers.src.bib"
+            if bib_only.exists():
+                data["papers.src.bib"] = bib_only.read_text(encoding="utf-8")
+            print(
+                "note: no manifest.json — treating this as an owner-staged bibliography "
+                "only. Plugin-exported files would require one (D49)."
+            )
+            return data
+
     if not manifest_path.exists():
         raise TransformError(
             f"{incoming}/manifest.json is missing, so the export cannot be verified.",
@@ -664,6 +688,197 @@ def build_socials(profile: dict) -> dict:
 
 
 # ---------------------------------------------------------------------------------------
+# personal.yml -> _data/personal.yml + _books/*.md
+# ---------------------------------------------------------------------------------------
+
+#: The Personal page whose entries become `_books/` instead of inline content (D17).
+BOOKS_PAGE = "reading"
+
+#: `book-shelf.liquid` groups on `item.started | date: '%Y'` and colours the caption from a
+#: closed set; anything else renders as UNCATEGORIZED (SCHEMA-NOTES §8).
+BOOK_STATUSES = frozenset(
+    {"abandoned", "finished", "interested", "paused", "queued", "reading", "reread"}
+)
+
+#: `book-shelf.liquid` groups on `item.started | date: '%Y'`, and Liquid's `date` filter
+#: cannot parse a partial date — it returns the input unchanged, so a `2026-07` start renders
+#: the *heading* "2026-07" instead of "2026". Date-like book fields are padded to a full date.
+BOOK_DATE_FIELDS = frozenset({"started", "finished", "released"})
+
+
+def _full_date(value: Any) -> Any:
+    """`2026` -> `2026-01-01`, `2026-07` -> `2026-07-01`; anything else untouched."""
+    text = str(value).strip()
+    if re.fullmatch(r"\d{4}", text):
+        return f"{text}-01-01"
+    if re.fullmatch(r"\d{4}-\d{2}", text):
+        return f"{text}-01"
+    return value
+
+
+#: Graph property -> `_books/` front-matter key. Everything else on a book entry is passed
+#: through, so a new property in the graph appears without a code change.
+BOOK_FIELDS = {"author", "started", "finished", "status", "isbn", "olid", "cover",
+               "stars", "released", "categories", "tags", "buy_link", "goodreads_review"}
+
+
+def link_of(value: Any) -> dict | None:
+    """A `{id, url}` link object, or None for a plain string.
+
+    Every third-party reference in the graph arrives this way, and the rule for all of them
+    is the same: render the link, never depend on the embed (D19).
+    """
+    if isinstance(value, dict) and value.get("id"):
+        return {"id": value["id"], "url": value.get("url")}
+    return None
+
+
+def build_personal(personal: dict) -> dict:
+    """`_data/personal.yml`: the graph's Personal pages, minus the one that becomes `_books/`.
+
+    The schema is deliberately open (the Personal page is the site's distinguishing feature),
+    so this deliberately does **not** enumerate properties — it carries them through and lets
+    the page render what is there. The one transformation is structural: sections become an
+    ordered list so the page does not depend on mapping order surviving YAML round-trips.
+    """
+    out: dict[str, Any] = {}
+    # NOT sorted: the graph's order is the author's editorial order, and this is the page
+    # whose whole point is narrative. Mapping insertion order is preserved by the YAML
+    # loader and is deterministic, so --check stays stable without alphabetising (PR #6).
+    for slug, page in personal.items():
+        if slug == BOOKS_PAGE:
+            continue
+        sections = page.get("sections") or {}
+        # `_root` holds blocks before the first "## Header" and must lead.
+        # `_root` holds blocks before the first "## Header" and must lead; the rest keep
+        # the order they appear in the graph.
+        ordered = sorted(sections, key=lambda s: s != "_root")
+        out[slug] = _compact(
+            {
+                "title": val(page, "title"),
+                "description": val(page, "description"),
+                "links": _page_links(page),
+                "sections": [
+                    {"slug": s, "title": _humanise(s), "entries": sections[s]}
+                    for s in ordered
+                    if sections[s]
+                ]
+                or None,
+            }
+        )
+    return {"pages": [{"slug": s, **p} for s, p in out.items()]}
+
+
+def _page_links(page: dict) -> list[dict] | None:
+    """Page-level link properties (`lastfm:`, `wikiloc:`, …) as a renderable list."""
+    links = []
+    for key, value in page.items():
+        if key in ("title", "description", "sections"):
+            continue
+        link = link_of(value)
+        if link and link.get("url"):
+            links.append({"name": _humanise(key), **link})
+    return links or None
+
+
+#: Names that a slug-capitalise gets wrong. "Lastfm" and "Diy" both looked wrong on the
+#: first render; anything absent here falls through to plain capitalisation.
+DISPLAY_NAMES = {
+    "lastfm": "Last.fm", "diy": "DIY", "soundcloud": "SoundCloud", "github": "GitHub",
+    "goodreads": "Goodreads", "youtube": "YouTube", "openstreetmap": "OpenStreetMap",
+    "isbn": "ISBN", "olid": "OLID", "url": "URL", "buy_link": "Buy",
+}
+
+
+def _humanise(slug: str) -> str:
+    """`cycling_and_hiking` -> `Cycling & Hiking`. Mirrors the plugin's slug rule (contract v1)."""
+    key = str(slug).lstrip("_")
+    if key in DISPLAY_NAMES:
+        return DISPLAY_NAMES[key]
+    words = key.split("_")
+    return " ".join("&" if w == "and" else w.capitalize() for w in words)
+
+
+def build_books(personal: dict) -> dict[str, str]:
+    """`_books/<slug>.md`, one per entry on the Reading page (D17).
+
+    Returns {filename: content}. `status` is validated against the closed set the shelf
+    layout colours, because an unrecognised value renders as UNCATEGORIZED with no warning.
+    """
+    page = personal.get(BOOKS_PAGE) or {}
+    out, problems = {}, []
+    for section, entries in sorted((page.get("sections") or {}).items()):
+        for entry in entries or []:
+            title = val(entry, "_name")
+            if not title:
+                problems.append(f"a book under {section!r} has no title, so it cannot be a page")
+                continue
+            front: dict[str, Any] = {"layout": "book-review", "title": title}
+            status = val(entry, "status") or _status_from_section(section)
+            if status and str(status).lower() not in BOOK_STATUSES:
+                problems.append(
+                    f"{title!r}: status {status!r} is not one the bookshelf recognises "
+                    f"({', '.join(sorted(BOOK_STATUSES))}) — it would render UNCATEGORIZED."
+                )
+                continue
+            if status:
+                front["status"] = str(status).lower()
+            for key in sorted(BOOK_FIELDS - {"status"}):
+                value = val(entry, key)
+                if value is None:
+                    continue
+                link = link_of(value)
+                value = link["url"] if link and link.get("url") else value
+                front[key] = _full_date(value) if key in BOOK_DATE_FIELDS else value
+            body = "\n".join(
+                f"- **{_humanise(k)}**: {_render_value(v)}"
+                for k, v in sorted(entry.items())
+                if k != "_name" and k not in BOOK_FIELDS and val(entry, k) is not None
+            )
+            name = f"{_slugify(title)}.md"
+            if name in out:
+                problems.append(
+                    f"{title!r} collides with another book on the filename {name!r} — one "
+                    "would silently overwrite the other. Distinguish the titles in the graph."
+                )
+                continue
+            out[name] = _book_page(front, body)
+    if problems:
+        raise TransformError("the Reading page cannot be turned into _books/ entries.", problems)
+    return out
+
+
+def _status_from_section(section: str) -> str | None:
+    """`currently_reading` -> `reading`. The section header is the status when none is set."""
+    guess = section.replace("currently_", "").rstrip("_")
+    return guess if guess in BOOK_STATUSES else None
+
+
+def _render_value(value: Any) -> str:
+    link = link_of(value)
+    if link:
+        return f"[{link['id']}]({link['url']})" if link.get("url") else str(link["id"])
+    return str(value)
+
+
+def _slugify(text: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", str(text).lower()).strip("-")
+    return slug or "untitled"
+
+
+def _book_page(front: dict, body: str) -> str:
+    # Front matter has to open on line 1 — a marker above it stops Jekyll parsing the block
+    # at all, silently costing the page its layout. So the marker is a YAML comment inside.
+    lines = ["---", GENERATED_HEADER]
+    for key, value in front.items():
+        lines.append(f"{key}: {yaml.dump(value, default_flow_style=True).strip().rstrip('...').strip()}")
+    lines += ["---", ""]
+    if body:
+        lines += [body, ""]
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------------------
 # papers.src.bib + publication_overrides.yml -> _bibliography/papers.bib
 # ---------------------------------------------------------------------------------------
 
@@ -696,7 +911,13 @@ def build_bibliography(data: dict, repo: pathlib.Path) -> str:
 
 
 def _scholar_identity(repo: pathlib.Path) -> tuple[str, list[str]]:
-    config = yaml.safe_load((repo / "_config.yml").read_text(encoding="utf-8")) or {}
+    config_path = repo / "_config.yml"
+    if not config_path.exists():
+        raise TransformError(
+            f"{config_path} is missing, so the bibliography cannot tell whose work is whose.",
+            ["scholar.last_name/first_name are what D43 keys authorship off."],
+        )
+    config = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
     scholar = config.get("scholar") or {}
     last = scholar.get("last_name")
     first = scholar.get("first_name")
@@ -736,11 +957,26 @@ def serialize(data: dict, source_note: str) -> str:
     return f"{GENERATED_HEADER}\n# source: {source_note}\n{body}"
 
 
+def prune_roots(repo: pathlib.Path) -> list[pathlib.Path]:
+    return [repo / name for name in PRUNE_ROOT_NAMES]
+
+
 def _is_ours(path: pathlib.Path) -> bool:
+    """Whether this transform owns `path`, by its marker.
+
+    Scans the first few lines rather than only the first: a file with YAML front matter has
+    to open with `---`, so its marker sits on line 2 (see `_book_page`).
+    """
     if not path.exists():
         return False
     with io.open(path, encoding="utf-8") as fh:
-        return fh.readline().strip() in (GENERATED_HEADER, GENERATED_HEADER_BIB)
+        for _ in range(3):
+            line = fh.readline()
+            if not line:
+                return False
+            if line.strip() in (GENERATED_HEADER, GENERATED_HEADER_BIB):
+                return True
+    return False
 
 
 def write_outputs(
@@ -803,7 +1039,7 @@ def run(incoming: pathlib.Path, repo: pathlib.Path, check: bool) -> int:
         # Header-marked files are evidence that an export existed. Their source is now
         # gone, so they are orphans (P6) — the one case where this path must be loud
         # rather than a clean no-op.
-        orphans = prune(set(), [repo / "_data"], repo, check)
+        orphans = prune(set(), prune_roots(repo), repo, check)
         if orphans:
             if check:
                 raise TransformError(
@@ -834,11 +1070,18 @@ def run(incoming: pathlib.Path, repo: pathlib.Path, check: bool) -> int:
         outputs[repo / "_data" / "socials.yml"] = serialize(
             build_socials(profile), "_incoming/profile.yml"
         )
+    if "personal.yml" in data:
+        personal = data["personal.yml"]
+        outputs[repo / "_data" / "personal.yml"] = serialize(
+            build_personal(personal), "_incoming/personal.yml"
+        )
+        for name, content in build_books(personal).items():
+            outputs[repo / "_books" / name] = content
     if "papers.src.bib" in data:
         outputs[repo / "_bibliography" / "papers.bib"] = build_bibliography(data, repo)
 
     changed, refused = write_outputs(outputs, repo, check)
-    pruned = prune(set(outputs), [repo / "_data", repo / "_bibliography"], repo, check)
+    pruned = prune(set(outputs), prune_roots(repo), repo, check)
 
     for name, phase in NOT_YET_CONSUMED.items():
         if name in data:
