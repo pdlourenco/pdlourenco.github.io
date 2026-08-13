@@ -349,7 +349,7 @@ API and make every graph edit a binary diff — images live in this repo:
 
 The intermediate YAML references them by **repo-relative path**, and the transform **fails
 loudly if a referenced path does not exist** — that check is what stops a silent broken image.
-`imagemagick` generates responsive widths from `assets/img/` (`SCHEMA-NOTES.md` §6), which is
+`imagemagick` generates responsive widths from `assets/img/` (`SCHEMA-NOTES.md` §7), which is
 another reason to keep everything under that tree.
 
 ### D23 — `_data/cv.yml` is the single source for the CV page; collection files are generated only for detail pages _(records P8)_
@@ -502,6 +502,332 @@ publish, so the published tree is only observable after a merge. Post-merge runs
 
 ---
 
+## Phase 3 — The transform core (CV + socials)
+
+### D34 — One entry can satisfy both contracts; the anchor key is what makes it work
+
+The gem and RenderCV want different keys, and for Awards they genuinely conflict:
+al-folio's `awards.liquid` renders `title`/`awarder`, and RenderCV **rejects**
+`{title, awarder, date, summary, url}` outright.
+
+Probing RenderCV 2.3 one entry at a time found the rule (`docs/SCHEMA-NOTES.md` §1): an entry
+must carry a key that **anchors** it to a RenderCV entry type, after which RenderCV tolerates
+al-folio's extra keys alongside. Upstream's own stock Awards entries validate only because
+`authors` next to `title` makes them a `PublicationEntry` — remove `authors` and the identical
+entry is rejected.
+
+So the transform emits **`name` _and_ `title`** for awards: `name` anchors a `NormalEntry` for
+RenderCV, `title`/`awarder` are what the gem renders. Verified both ways on generated output —
+`rendercv render` validates, and all 11 cards render with content on `/cv/`. There was no need
+to trade a good-looking page against a valid PDF; it just had to be deliberate.
+
+### D35 — Section titles are chosen for the gem's dispatch table, not for prose
+
+`Research Interests` reaches al*folio_cv's bare fallback; **`Academic Interests`** reaches the
+richer `interests.liquid`. Same content, better rendering, so that is the title emitted (D14).
+Conversely `Supervised Students` and `Jury` are deliberately \_not* special-cased titles, so
+their entries are `BulletEntry` — structure lives in the markdown of the bullet, which is what
+`seed.md` suggested for supervisor affiliations anyway.
+
+`SECTION_ORDER` in the transform is asserted against the sections actually built: a mapping
+added without an order entry raises rather than silently dropping the section.
+
+### D36 — Grouped skills and interests; `level` orders, it does not display
+
+`skills.liquid` renders `name` + `keywords`, which reads better as "Programming: Python,
+JavaScript" than as one card per skill, so the transform emits one entry per `group`. The
+graph's `level` is not rendered by that template, so it is used to order members within the
+group rather than being dropped silently. Same for research interests.
+
+### D37 — The version gate fires before content validation, deliberately
+
+`broken/` (schema_version 99) fails on the version gate and never reaches its cv.yml
+violations. That is correct — content cannot be checked against a contract version we do not
+know — but it means that fixture cannot exercise the report-everything path through the
+transform. `test/test_transform.py` therefore builds a **valid-v1 manifest with broken
+content** for that case, and asserts both orderings separately. Found by a test failing for
+the right reason; noted because "the fixture covers it" was wrong.
+
+### D38 — An absent `_incoming/` is success, not failure
+
+`bin/transform.py` with no staged export prints what it did not find and exits 0. That keeps
+`--check` green in CI from the moment it is wired (now) until a real export exists, without
+weakening any check that applies once data is present. The states that _do_ fail: no manifest,
+no `schema_version`, an unknown version, files disagreeing with the manifest list or hashes, a
+schema violation, an unmapped section, an entry the site would render blank, or a
+hand-written file in the way. **Refined by D42**: nothing-staged is only a no-op when no
+generated files are committed either.
+
+### D39 — Deferred from this phase, named so it is not mistaken for done
+
+`personal.yml` (Phase 5) and `publication_overrides.yml` (Phase 4) are validated and then
+reported as "not consumed yet" on every run, rather than ignored. Also deferred: `cv.address`
+(the graph has no location fields — the gem drops scalar `location`, per §1), `cv.label`,
+`social_networks` for the PDF, and `_data/icon_map.yml` + the logo assets D22 calls for — the
+graph's `icon` short keys are carried through the intermediate format but not yet mapped to
+files.
+
+### D40 — An entry with no dates is undated, never "present"
+
+`end_date()` emits `present` only when a `start` exists, and `_sort_key_chronological` has
+three ranks — ongoing (start, no end), dated, undated — rather than folding undated in with
+ongoing. This mirrors `al_folio_cv`'s own `date_sorting.rb`, whose rule is that a start with
+no end is ongoing and no dates at all is undated.
+
+The reason this needed a decision rather than a quiet fix: the earlier behavior emitted
+`end_date: present` for a dateless entry and sorted it first, so the CV asserted that an
+undated role was the current one. Nothing downstream would have caught it — RenderCV 2.3
+validates `end_date: present` with no `start_date`, and the gem's undated-sorts-last rule
+never applied because the transform handed it an explicit `"present"` first. **A transform
+that invents a value is worse than one that omits it**, because the invented value is
+type-correct and therefore invisible to every check that isn't a human reading the page.
+This is the concrete case behind the "never invents" line in `bin/transform.py`'s docstring.
+
+Fixture note worth keeping: the dateless entry pinning the _ordering_ has to be an
+**experience**, not a project. `map_projects` sorts by `importance`, so a dateless project
+sorts last for an unrelated reason and passes the assertion without exercising the date rank
+at all. `valid/cv.yml` carries both — a dateless experience for ordering, a dateless project
+for key omission.
+
+### D41 — Unmapped profile fields are an error, matching the unmapped-section guard
+
+`profile.schema.json` is deliberately open (`additionalProperties: true`) so a plugin that
+learns a new network still validates. That makes the transform the only place the gap can be
+caught, exactly as with `cv.yml`'s unmapped sections (the schema is permissive; the transform
+is loud). `build_socials` tracks a `consumed` set — `SOCIALS_BUILTIN` ∪ `SOCIALS_CUSTOM` ∪
+`CONSUMED_BY_CV` (the identity scalars the CV header reads) — and raises on anything left
+over, naming the keys and the three places a mapping can go.
+
+Accounting by name rather than by shape is the point: a key is either listed somewhere or it
+is an error, so there is no `{id, url}`-sniffing heuristic to be wrong about. `email_work` is
+handled as an alias, not a mapping — jekyll-socials has exactly one `email` key, so the
+transform prefers `email_personal` and falls back to `email_work` rather than emitting no
+email at all.
+
+### D42 — Header-marked files are evidence an export existed; D38 is refined accordingly
+
+D38 stands — a repository that never staged anything is a clean no-op — but "nothing staged"
+must not stay quiet when generated files are still committed. Deleting the export after
+`_data/cv.yml` was committed would otherwise leave sourceless generated content served
+indefinitely with `--check` green.
+
+The nothing-staged branch therefore scans the prune roots for `_is_ours()` files. None → the
+D38 no-op, unchanged. Some → error under `--check`, prune in a real run. No state file is
+needed because the evidence is already on disk: the generated header _is_ the record that an
+export once existed.
+
+The two modes deliberately disagree here, which is the one place in the transform where
+`--check` is not "the real run but asserting." `--check` answers _is this commit
+consistent?_ — and a sourceless generated file means no. A real run answers _make it
+consistent_ — and the export is gone, so the output should be too. Both are correct; the
+asymmetry is called out in a comment at the branch so it does not read as a bug.
+
+---
+
+## Phase 4 — Bibliography, publications page, teaching page
+
+Design settled against the **real** Zotero export (106 entries) rather than a fixture, and
+against the owner's stated spec for what the page should contain. Counts below are measured.
+
+### D43 — Authorship decides destination: `author` → publications, `collaborator` → teaching, neither → nowhere
+
+The owner heads an engineering section and keeps the whole section's output in one Zotero
+library, including work he neither authored nor supervised. That work must not appear on the
+site at all. The library already encodes the distinction, so no manual exclusion list is
+needed:
+
+| "Lourenço" appears in | meaning          | destination   | count |
+| --------------------- | ---------------- | ------------- | ----- |
+| `author`              | his own work     | publications  | 74    |
+| `collaborator` only   | he supervised it | teaching page | 19    |
+| neither               | section output   | **excluded**  | 13    |
+
+Verified that the excluded 13 are genuinely other people's supervisions — their
+`collaborator` lists Nuno Paulino, Pedro Batista, Aurélio Araújo — and not misfiled work of
+his. Name matching must normalise the LaTeX cedilla: the export writes `Louren{\c c}o`, so a
+plain `"Lourenço"` substring test finds **1 of 74**. That near-miss is why this rule is
+implemented over a normalised name and asserted by a test.
+
+### D44 — A paper presentation merges into its paper; a poster never does
+
+Per the owner's WordPress precedent, a paper and the talk that presented it are one entry, not
+two. `bib.liquid` supports this directly (SCHEMA-NOTES §6): `note` renders a second line under
+the venue, and `slides` renders a button. So a "Paper Presentation" folds into its paper as
+`note` + `slides` and is never listed separately.
+
+**A shared title is not evidence of a shared event, and posters are the counter-example.** The
+merge rule is therefore _same title **and** same venue **and** same date_ — not title alone.
+Checked entry by entry:
+
+| record type           | matches its paper on address + date?               | disposition     |
+| --------------------- | -------------------------------------------------- | --------------- |
+| Paper Presentation ×7 | **yes, all 7** (Linz Jul 2015, Crete Jun 2013, …)  | merge           |
+| Poster ×6             | **no, none** — all `Lisboa, Portugal`, other dates | list separately |
+
+Every poster is a Lisbon event distinct from where the paper appeared: the _Globally
+Exponentially Stable Filter_ poster is Lisboa Jul 2015 while its paper is **Linz, Austria**
+Jul 2015; the _Earth-Fixed Trajectory_ poster is 2017 against a 2020 journal article. Decisive
+case: _New Design Techniques_ has **two** posters, May 2016 and Jul 2016, so they are separate
+events even from each other — a title-keyed merge would have silently dropped one of them.
+
+All **6** posters are consequently their own section (D47). This corrects an earlier reading
+that merged 5 of them on title alone; the owner caught it, and the venue/date comparison is
+now the rule the transform implements and a test asserts.
+
+Two further records legitimately survive as duplicates-by-title: an invited lecture given
+twice (IST, 2022-03 and 2025-10) is two events, and a 2024 conference paper later extended
+into a 2025 journal submission is two outputs.
+
+### D45 — The generated `.bib` must not carry a `type` field
+
+A BibTeX `type` field shadows the entry type inside `bib.liquid` and silently drops the venue
+line — proved in SCHEMA-NOTES §6, and it would hit **20 of 106** entries here, i.e. most of
+the teaching page. The transform strips `type` and carries the degree in the fields that
+actually render.
+
+This is the same failure class as D14 and D34: the input validates, the build succeeds, and
+the page is quietly wrong. It is caught here by an assertion on generated output rather than
+by looking at the page.
+
+### D46 — Sections come from a `section` field queried per block, not from `group_by`
+
+`scholar.group_by: year` groups _within_ one `{% bibliography %}` call and cannot produce a
+type-ordered page. `{% bibliography --query @*[section=journal] %}` selects on an arbitrary
+field and does work (verified by build). The transform assigns each entry exactly one
+`section` value; the page is one query block per section. `section` is added to
+`filtered_bibtex_keywords` so it does not leak into the "Bib" popup.
+
+### D47 — Page order is the owner's, and an empty section renders nothing
+
+Journal papers · Conference papers · Book chapters · Books · Theses · Preprints — then
+Posters · Talks. Measured: 15 · 23 · 2 · **0** · 2 · 4 — then 6 · 12.
+
+Books is specified by the owner and currently empty. It is **not** emitted as an empty
+heading; the page shows a section only when it has entries, so the category can be filled
+later without a code change.
+
+### D48 — Supervised theses get their own page, sourced from the bib, not the graph
+
+**Supersedes part of D16 and D8.** `seed.md` put teaching inside the CV page and kept
+`/teaching/` off-nav; the owner has since asked for a separate teaching page for supervised
+theses, so `/teaching/` is now `nav: true` and carries the supervision list. What D16 decided
+about `_teachings/` is unchanged: that collection is still only for courses warranting their
+own page, and `{% include courses.liquid %}` (which reads `site.teachings`) can return to this
+page above the supervision list as soon as any course does. Removing the include now costs
+nothing — the collection is empty — but it is the one thing on this page that was not
+replaced by something equivalent, so it is named here rather than left to a silent diff.
+
+19 distinct supervisions, 2021–2026. They render from `collaborator` per D43, which raises a
+duplication risk worth stating: the Logseq graph _also_ carries
+`cv.teaching.supervised_students`, which Phase 3 already renders on the CV. These are two
+sources for one fact. The CV keeps the graph as its source (it is a CV section), the teaching
+page uses the bib (it needs per-thesis links), and the transform must not invent a third.
+
+Note Zotero stores every supervision as `@phdthesis` regardless of degree — 16 of 19 are
+M.Sc. theses — so the degree comes from the `type` field's _value_ before D45 strips the
+field, never from the entry type.
+
+### D49 — `papers.src.bib` is owner-staged, so the manifest check must tolerate it
+
+The export integrity check (both directions, D-Phase-2) flags any file in `_incoming/` that
+the manifest does not list. `papers.src.bib` comes from Zotero by hand, not from the plugin,
+so it would fail that check the moment it is staged.
+
+**Not implemented yet — Phase 4 does it.** Today `papers.src.bib` appears only in
+`EXPORT_MARKERS`; `_check_export_integrity` still exempts `README.md` alone, so staging a
+Zotero export right now fails the both-directions check with "present but not listed". Phase 4
+will exempt it by name, the same way `README.md` already is, and assert the exemption in a
+test. The exemption must stay narrow, so that a plugin which later _does_ emit the
+bibliography still round-trips.
+
+### D50 — A link is emitted only when its asset exists
+
+Zotero's `file` field holds local Windows paths
+(`..\Papers\My Research\Conference\Branco et al_2021_….pdf`), not URLs, and covers only 47 of
+the 74 authored entries. A path like that cannot become a working link, so the transform never
+copies one into `pdf`/`slides`/`poster`. Instead it maps a staged asset under `assets/pdf/`
+and emits the field only if that file is present — an absent PDF means no button, never a
+dead one. Getting the PDFs into the repo is an owner action (see below).
+
+### D51 — Peer-review venues are deferred, pending a source
+
+Not in the Zotero export at all, and the owner's previous site listed them. The intended home
+is a new `peer_review` section in the intermediate contract, which needs a companion-plugin
+change — so the page waits on the plugin rather than being hand-authored into `_data/` and
+becoming a second content source outside Logseq. Recorded here so it is not mistaken for an
+oversight. The owner was offered a hand-authored interim file and did not choose it.
+
+### D52 — Judgment calls on ambiguous records, stated rather than silently applied
+
+Adopted as defaults because they change presentation only, and each is reversible from Zotero:
+
+- the 2025 entry whose venue reads "CEAS Space Journal, submitted" is listed with an explicit
+  submitted marker rather than hidden — the record is real, its status is stated;
+- two untyped `@misc` records duplicating a conference paper (Briz _In-Orbit Assembly_, and
+  _Nonlinear MPC for Attitude Guidance_) are treated as preprints and suppressed in favour of
+  the paper, matching D44;
+- `guerreiroAODCSDevelopmentANTAEUS` is untyped and duplicates nothing, so it cannot be
+  classified — the transform **errors** on it rather than guessing a section. This is the
+  D43/D46 rule working: an entry with no derivable section is a loud failure, not a silent
+  omission.
+
+Data problems only the owner can fix are listed under owner action items.
+
+### D53 — `address` is renamed to `location`; posters and talks carry their venue in `note`
+
+`bib.liquid` never reads `address` or `howpublished` (SCHEMA-NOTES §6), and Zotero writes the
+place as `address` on **83 of 106** entries. Renaming it to `location` is therefore not
+cosmetic — without it the place disappears site-wide.
+
+For `@misc` (posters, talks, lectures) the transform puts the event and place in **`note`**
+instead, because an `@misc` with `location` renders a stray leading comma: the template emits
+`{{ entrytype }}, {{ location }}` and `entrytype` is empty for entry types with no venue
+branch. `note` renders as its own line and reads correctly. Papers keep `location`, where the
+comma is right.
+
+### D54 — The source export switches to **Better BibLaTeX**; the mapping is derived from the real file
+
+The first export was Better BibTeX (legacy). Diagnosed from the field census, not guessed:
+`address` 83 / `location` 0, `journal` 15 / `journaltitle` 0, `year` 105 + `month` 87 /
+`date` 0, and `eventtitle` 0 / `venue` 0.
+
+The owner reports that the event names **are** recorded in Zotero for posters, presentations
+and conference papers. They are absent from the export because **plain BibTeX has no field to
+hold them** — there is no `eventtitle` in BibTeX, so BBT discards the meeting/conference name.
+BibLaTeX has `eventtitle` and `venue`, and BBT maps the meeting name into `eventtitle`
+(upstream BBT issues #643, #644, #1195). So this is a translator limitation, not missing data
+and not a transform bug.
+
+BibLaTeX is a net simplification here, which is why it wins over patching:
+
+| datum      | BibTeX (was)                | BibLaTeX       | net effect                    |
+| ---------- | --------------------------- | -------------- | ----------------------------- |
+| event name | **dropped**                 | `eventtitle`   | the fix                       |
+| place      | `address` (renders nothing) | `location`     | **D53's rename becomes moot** |
+| journal    | `journal`                   | `journaltitle` | one rename to add             |
+| date       | `year` + `month`            | `date`         | must be split back out        |
+
+Rejected alternative: keep BibTeX and add `tex.eventtitle:` lines to each item's Zotero
+`Extra` field. BBT does support that (`:` plain-text, `=` raw LaTeX, optionally scoped with a
+`bibtex.`/`biblatex.` prefix), and it is the right tool for a one-off field — but not for ~40
+items, and it would leave the export permanently lossy for anything else BibTeX cannot carry.
+
+**The mapping is not written until the BibLaTeX file exists.** Entry types change
+(presentations become `@unpublished`), and BBT's exact routing of Place vs Event Place is not
+something to infer from documentation. This repo has already been bitten three times by
+plausible-but-wrong assumptions about a format (D14, D34, D45), and D26/D27 exist precisely to
+say: enumerate from the artifact, do not derive from prose.
+
+Two things that de-risk the switch, both worth knowing before it happens:
+
+- **Cite-keys are stable across translators** — BBT pins them per item — so
+  `publication_overrides.yml` keys survive. The malformed `::` / `::a` keys still need fixing
+  in Zotero regardless.
+- **D45 still applies.** BibLaTeX uses `type` for thesis degree (`mathesis`, `phdthesis`), so
+  the `type`-shadowing strip remains necessary.
+
+---
+
 ## Owner action items (nothing in a commit can do these)
 
 GitHub Pages **cannot** build this site itself: it is gem-based (`theme: al_folio_core` plus
@@ -525,6 +851,37 @@ hand — see `docs/al-folio/INSTALL.md` §Deployment:
 
 Until step 4 happens, `pdlourenco.github.io` keeps serving whatever it serves today; merging
 Phase 0 does not publish anything.
+
+### Added by Phase 4 — things in the Zotero library only the owner can fix
+
+7. ⚠️ **Two cite-keys are `::` and `::a`.** Both are 2026 M.Sc. theses he supervises (Maria
+   Fernandes, _System Architecture and Guidance & Control Design…_; Catarina Gomes, _Modelling
+   and Control of Modular and Flexible Large Space Structures_), so both land on the teaching
+   page. Cite-keys are the primary key `publication_overrides.yml` references and appear in
+   page anchors, so they must be fixed **in Zotero** — a generated substitute would change on
+   the next export and silently break any override pointing at it. The transform rejects them
+   with a message naming both entries.
+8. **One supervision is dated 2028** (Cachim, _Verification & Validation of Guidance and
+   Control…_) and **one authored entry has no year** (_Earth-Fixed Trajectory and Map Online
+   Estimation_). Probably a typo and an omission; both are reported, neither is guessed at.
+9. **`guerreiroAODCSDevelopmentANTAEUS` cannot be classified** — an untyped `@misc` that
+   duplicates nothing (D52). Give it a Zotero item type or a `type` value and it files itself.
+10. **PDFs are not in the export.** Zotero's `file` field holds local Windows paths, so the
+    paper/slides/poster buttons the previous site had need the actual files copied to
+    `assets/pdf/` (D50). Naming is matched on the Zotero filename, so copying them across
+    unchanged is enough. Until then those entries simply show no button.
+11. **Peer-review venues have no source yet** (D51) — they need either the companion plugin to
+    emit a `peer_review` section, or a decision to hand-author the list in this repo.
+12. ⚠️ **Re-export the library as Better BibLaTeX**, not Better BibTeX — see **D54**. The event
+    names for posters, presentations and conference papers are already recorded in Zotero;
+    legacy BibTeX simply has no field that can carry them, so BBT drops them on export.
+    This is the one **blocking** item for the publications page. Without event names the 6
+    posters render as "Poster · Lisboa, Portugal · Jul 2015", and the two _New Design
+    Techniques_ posters (May 2016, Jul 2016) are indistinguishable from each other.
+    Two things worth confirming while re-exporting, because BBT routes them to different
+    BibLaTeX fields: whether the conference papers' event name is distinct from the proceedings
+    title already in `booktitle` (26 entries have one), and whether the posters' place is
+    recorded as Zotero's **Event Place** rather than plain Place.
 
 ---
 

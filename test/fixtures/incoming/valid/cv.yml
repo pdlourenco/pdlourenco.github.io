@@ -22,6 +22,13 @@ experience:
     end: null
     description: Guidance, navigation and control for on-orbit servicing.
     icon: exa
+  - position: Undated Early Role
+    organization: Example Consultancy
+    location: null
+    start: null
+    end: null
+    description: No dates at all — must sort last and never read as current.
+    icon: null
 education:
   - degree: PhD
     field: Computer Science
@@ -98,6 +105,17 @@ projects:
     keywords: GNC, simulation
     importance: 1
     icon: exa
+  - name: An Undated Side Project
+    institution: null
+    category: fun
+    start: null
+    end: null
+    description: No dates at all — must not be presented as ongoing (sorts last).
+    url: null
+    code: null
+    keywords: null
+    importance: 9
+    icon: null
   - name: Weekend Telemetry Dashboard
     institution: null
     category: fun

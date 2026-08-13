@@ -122,6 +122,33 @@ renders in **array order**.
 Because the PDF path (`rendercv render`) renders in array order and the gem re-sorts only two
 sections, **the transform must emit every section already sorted** — see D15.
 
+### Satisfying the gem and RenderCV at the same time
+
+The two contracts are not identical, and one section genuinely conflicts — but it is resolvable.
+Probed against RenderCV 2.3 by generating one-entry documents and validating each:
+
+| Entry shape                                                                   | RenderCV 2.3 |
+| ----------------------------------------------------------------------------- | ------------ |
+| `{bullet}` (BulletEntry)                                                      | accepted     |
+| `{label, details}` (OneLineEntry)                                             | accepted     |
+| `{name, summary, highlights, dates}` (NormalEntry)                            | accepted     |
+| `{company, position, location, summary, highlights, dates}`                   | accepted     |
+| `{institution, area, degree \| studyType, score, courses, highlights, dates}` | accepted     |
+| `{name, keywords, level, icon}` — al-folio Skills/Interests                   | accepted     |
+| **`{title, awarder, date, summary, url}` — al-folio Awards**                  | **rejected** |
+| `{foo, bar}` — nothing recognisable                                           | rejected     |
+
+**The rule: an entry must carry a key that anchors it to a RenderCV entry type, and RenderCV then
+tolerates al-folio's extra keys alongside.** That is why upstream's stock Awards entries validate
+at all — they carry `authors` next to `title`, which makes them a `PublicationEntry`; drop
+`authors` and the same entry is rejected. Verified by removing one key at a time: only `title`
+and `authors` are load-bearing.
+
+So for Awards, emitting **`name` in addition to `title`** anchors the entry as a `NormalEntry`
+and `title`/`awarder`/`url` ride along — the gem's `awards.liquid` reads `title`/`awarder` and
+RenderCV validates. No trade-off between a good-looking page and a valid PDF is necessary; it
+just has to be deliberate.
+
 ---
 
 ## 2. `_data/socials.yml` (`jekyll-socials 0.0.7`)
@@ -247,7 +274,84 @@ Own-name entries are italicised rather than linked, driven by `_config.yml`'s
 
 ---
 
-## 6. Responsive images
+## 6. The publications page and `bib.liquid`
+
+Read out of `al_folio_core-1.0.15/_layouts/bib.liquid` and verified by building the site
+against a probe `.bib`. All statements below were **executed**, not inferred.
+
+### ⚠️ A BibTeX `type` field silently shadows the entry type
+
+`bib.liquid` picks the venue line with `{% if entry.type == 'article' %}` … `{% elsif thesis
+contains entry.type %}`. `entry.type` normally holds the **entry type** (`article`,
+`inproceedings`, `phdthesis`). But BibTeX also defines `type` as a legitimate _field_ on
+`@phdthesis`/`@mastersthesis`/`@techreport` — Zotero uses it for `type = {M.Sc. Thesis}` — and
+when present **the field wins**. Proved with two otherwise-identical entries:
+
+| entry                                   | `type` field   | rendered venue line         |
+| --------------------------------------- | -------------- | --------------------------- |
+| `@phdthesis` + `school = {IST}`         | `Ph.D. Thesis` | `2019` — **school dropped** |
+| `@phdthesis` + `school = {IST Control}` | _absent_       | `IST Control, 2018`         |
+
+So `entry.type` became `"Ph.D. Thesis"`, matched no branch, and the school vanished with no
+warning. This affects **20 of the 106 entries** in the real Zotero export (all `@phdthesis`).
+`@misc` is unharmed only by luck: it has no venue branch either way. `type` is **not** in
+`_config.yml`'s `filtered_bibtex_keywords`, correctly — it is a real BibTeX field — so it also
+shows in the "Bib" popup. The transform must therefore not pass `type` through; it carries the
+degree elsewhere (D45).
+
+### Grouping by an arbitrary field works
+
+`{% bibliography --query @*[section=journal] %}` selects on a **non-standard field**, which is
+what makes a type-ordered page possible at all — `scholar.group_by: year` in `_config.yml`
+groups _within_ one `{% bibliography %}` call, and cannot produce Journal/Conference/Chapters
+sections. Verified: four `--query @*[section=…]` blocks each rendered exactly their own
+entries. A field used only for dispatch should be added to `filtered_bibtex_keywords` so it
+does not leak into the "Bib" popup.
+
+### ⚠️ `address` and `howpublished` render nothing
+
+Zotero writes the place as **`address`**; `bib.liquid` only ever reads **`location`**. Neither
+`address` nor `howpublished` appears anywhere in the template. Verified with three otherwise
+identical `@misc` entries:
+
+| fields present                                 | rendered venue line                              |
+| ---------------------------------------------- | ------------------------------------------------ |
+| `address = {Lisboa, Portugal}`                 | `Jul 2015` — **place lost**                      |
+| `location = {Lisboa, Portugal}`                | `, Lisboa, Portugal, Jul 2016`                   |
+| `location` + `howpublished = {ISR Poster Day}` | `, Lisboa, Portugal, 2017` — **event name lost** |
+
+`address` is present on **83 of 106** entries in the real export, so the transform must
+rename it to `location` or the place silently disappears from the whole site.
+
+Note the **leading comma** in rows 2 and 3: the template builds the line as
+`{{ entrytype }}, {{ location }}`, and `entrytype` is empty for `@misc` (no venue branch
+matches). So an `@misc` with `location` always renders `, Place, Year`. For entry types that
+do have a venue branch (`article`, `inproceedings`, …) the comma is correct. Consequence: for
+poster and talk entries, put the event and place in **`note`**, which renders as its own clean
+line, rather than in `location`.
+
+### Fields `bib.liquid` renders, confirmed on a real build
+
+- **`note`** → a second `.periodical` line under the venue. This is the slot for a
+  "presented at …" line, which is what lets one record carry its own talk.
+- **`slides`**, **`poster`**, **`pdf`**, **`supp`** → buttons; a bare filename is prefixed with
+  `/assets/pdf/`, and a value containing `://` is used verbatim.
+- **`additional_info`** → appended to the venue line and markdownified — the slot for
+  ", submitted". Cosmetic caveat observed: the template then emits `, ` before the year, so a
+  value ending in a word yields `submitted , 2025` (double space). Prefer `note` if that
+  matters.
+- **`code`**, **`website`**, **`blog`**, **`video`**, **`html`** → buttons.
+- **`abbr`** → venue badge, coloured/linked via `_data/venues.yml`.
+- **`award`** + **`award_name`** → award pill, with `award` also rendered in a print block.
+- **`abstract`** → "Abs" toggle; **`bibtex_show`** → "Bib" toggle; **`doi`**, **`arxiv`**,
+  **`hal`** → link buttons.
+- **`annotation`** → an info popover on the author line.
+- **`preview`** → thumbnail from `assets/img/publication_preview/`, gated on
+  `enable_publication_thumbnails`.
+
+---
+
+## 7. Responsive images
 
 `imagemagick.enabled: true` scans `input_directories: [assets/img/]` for
 `.jpg/.jpeg/.png/.tiff/.gif` and generates widths `480`, `800`, `1400`. It needs the

@@ -43,7 +43,7 @@
           "description": "Absent or null when the graph property was not a markdown link; the transform then builds the URL from the id via jekyll-socials' own template."
         }
       },
-      "description": "A network profile as {id, url}. Not every network here has a built-in jekyll-socials key — cienciavitae and publons in particular need the arbitrary-key custom-social form (SCHEMA-NOTES.md §2)."
+      "description": "A network profile as {id, url}. Not every network here has a built-in jekyll-socials key — cienciavitae in particular needs the arbitrary-key custom-social form; publons does have a built-in key (SCHEMA-NOTES.md §2)."
     }
   }
 }

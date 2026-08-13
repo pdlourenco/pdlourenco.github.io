@@ -5,20 +5,20 @@
   "website": "plourenco.eu",
   "files": ["cv.yml", "profile.yml", "personal.yml", "publication_overrides.yml", "blog/2026-03-15-a-sample-post.md", "manifest.json"],
   "hashes": {
-    "cv.yml": "7df40d53588baa69fee11e79091516b793a7155d454b706c83c590034d53d6c8",
+    "cv.yml": "bd17242229e9eb790329f102c53d6093875c470f64d084b4c7b8ff92c9570ff5",
     "profile.yml": "026f4067b5f3ce23f7ff6ca72d4646fdd681e8316a979c0a12ad321645e1e376",
     "personal.yml": "a2917e72ae5599a54f18e25590c1a23840cc8751abe3bfe719b900eb717e12b0",
     "publication_overrides.yml": "ed56c255c8140e649e011a20108feb03f286733f721723e2c49c857e0bfb3095",
     "blog/2026-03-15-a-sample-post.md": "db3b1e4a8af15c320d13e285f504a2564df7d7448f0fa23ff2c91a2a84ed532c"
   },
   "counts": {
-    "experience": 2,
+    "experience": 3,
     "education": 2,
     "awards": 1,
     "skills": 2,
     "languages": 2,
     "research_interests": 1,
-    "projects": 2,
+    "projects": 3,
     "supervised_students": 2,
     "jury": 1,
     "personal_pages": 4,
