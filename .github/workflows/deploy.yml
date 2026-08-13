@@ -61,6 +61,16 @@ on:
       - "!README.md"
   workflow_dispatch:
 
+# Two pushes in quick succession would otherwise run two deploys, and the publish step is
+# last-writer-wins by *finish* time — so a slower earlier run could overwrite a faster later
+# one and leave the site on the older commit. Grouping serialises them; `cancel-in-progress:
+# false` lets an in-flight publish finish rather than tearing it down half-written, and
+# GitHub keeps only the newest run queued behind it, so the newest commit still wins.
+# Same race family as D60: a correct check that cannot prevent the wrong publish.
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: write
 

@@ -934,6 +934,15 @@ the stale site beside it** — the check was reporting a problem it had no power
 that `deploy` `needs:`. The called workflow keeps its own `permissions: contents: read`, so the
 gate stays read-only even though the caller holds `contents: write`.
 
+`deploy.yml` also carries a `concurrency` group, for the same reason at a different layer.
+Two pushes in quick succession ran two deploys, and the publish step is last-writer-wins by
+_finish_ time — so a slower earlier run could overwrite a faster later one and leave the site
+on the older commit. Grouping by ref serialises them; `cancel-in-progress: false` lets an
+in-flight publish complete rather than being torn down half-written, and GitHub keeps only the
+newest run queued behind it, so the newest commit still wins.
+
+Both halves of D60 are the same failure: CI that observes a problem it cannot prevent.
+
 The plan's stated ordering was `--check` → `rendercv render` → build → deploy. Only the
 `--check` half is implemented, deliberately: `render-cv.yml` **commits** the rendered PDF to
 the default branch, so calling it from deploy would make publishing a writing operation and
