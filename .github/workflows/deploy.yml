@@ -15,6 +15,8 @@ on:
       - "**.yml"
       - "Gemfile"
       - "Gemfile.lock"
+      - "_incoming/**"
+      - "bin/**"
       - "!.github/workflows/axe.yml"
       - "!.github/workflows/broken-links.yml"
       - "!.github/workflows/deploy-docker-tag.yml"
@@ -42,6 +44,8 @@ on:
       - "**.yml"
       - "Gemfile"
       - "Gemfile.lock"
+      - "_incoming/**"
+      - "bin/**"
       - "!.github/workflows/axe.yml"
       - "!.github/workflows/broken-links.yml"
       - "!.github/workflows/deploy-docker-tag.yml"
@@ -57,11 +61,28 @@ on:
       - "!README.md"
   workflow_dispatch:
 
+# Two pushes in quick succession would otherwise run two deploys, and the publish step is
+# last-writer-wins by *finish* time — so a slower earlier run could overwrite a faster later
+# one and leave the site on the older commit. Grouping serialises them; `cancel-in-progress:
+# false` lets an in-flight publish finish rather than tearing it down half-written, and
+# GitHub keeps only the newest run queued behind it, so the newest commit still wins.
+# Same race family as D60: a correct check that cannot prevent the wrong publish.
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: write
 
 jobs:
+  # Generated output must agree with _incoming/ *before* anything is published. Run as a
+  # prerequisite rather than a sibling: as independent workflows they race, and a push with
+  # stale output would publish the stale site while the check went red beside it (D60).
+  verify:
+    uses: ./.github/workflows/transform-check.yml
+
   deploy:
+    needs: verify
     # available images: https://github.com/actions/runner-images#available-images
     runs-on: ubuntu-latest
     steps:

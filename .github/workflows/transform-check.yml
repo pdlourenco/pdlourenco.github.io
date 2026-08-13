@@ -2,14 +2,18 @@ name: Transform check
 
 # The committed-output model (docs/DECISIONS.md D4): the transform runs on a developer
 # machine and its output is committed; CI only ever verifies. Nothing here writes to the
-# repository. Phase 7 sequences this with the deploy workflow.
+# repository.
+#
+# Phase 7 exposes `workflow_call:` so `deploy.yml` runs this *before* publishing. Without
+# that gate the two workflows race: a push with stale generated output would turn this job
+# red while deploy independently published the stale site (D60).
 on:
   push:
     branches: [master, main]
     paths:
       - "_incoming/**"
       - "_data/**"
-      - "bin/transform.py"
+      - "bin/**"
       - "docs/intermediate-schema/**"
       - "test/**"
       - "requirements.txt"
@@ -19,11 +23,12 @@ on:
     paths:
       - "_incoming/**"
       - "_data/**"
-      - "bin/transform.py"
+      - "bin/**"
       - "docs/intermediate-schema/**"
       - "test/**"
       - "requirements.txt"
       - ".github/workflows/transform-check.yml"
+  workflow_call:
   workflow_dispatch:
 
 permissions:

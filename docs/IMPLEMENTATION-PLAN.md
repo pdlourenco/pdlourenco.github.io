@@ -294,6 +294,12 @@ checks passing.
 > 1. **`deploy.yml` is path-filtered.** It triggers on assets/markdown/YAML/HTML/JS/Liquid/
 >    Gemfile changes, so a transform-only change (`_incoming/**`, `bin/transform.py`) can
 >    silently fail to redeploy. Add those paths.
+>
+>    _(Phase 7: **mostly wrong** — see `docs/DECISIONS.md` D61. `**.yml`/`**.bib`/`**/*.md`
+>    already matched `_incoming/` and every generated file. Only `manifest.json` and `bin/*.py`
+>    were unmatched; both added. The real hole was `transform-check.yml` watching
+>    `bin/transform.py` by name, which excluded `bin/bibliography.py`.)_
+>
 > 2. **`render-cv.yml` pushes to the default branch** — its last step is
 >    `git add -A && git commit -m "chore: render the latest CV" && git push`. Under model (a)
 >    that `-A` is a route for un-reviewed generated output to reach `master` and then drift

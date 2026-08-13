@@ -922,6 +922,56 @@ Phase where a build caught something a read did not (D14, D45, and this).
 
 ---
 
+## Phase 7 — CI and deploy wiring
+
+### D60 — Deploy is gated on the transform check, because independent workflows race
+
+`transform-check.yml` and `deploy.yml` both triggered on push and ran concurrently. A push
+carrying stale generated output would therefore turn the check red **while deploy published
+the stale site beside it** — the check was reporting a problem it had no power to prevent.
+
+`transform-check.yml` now exposes `workflow_call:` and `deploy.yml` runs it as a `verify` job
+that `deploy` `needs:`. The called workflow keeps its own `permissions: contents: read`, so the
+gate stays read-only even though the caller holds `contents: write`.
+
+`deploy.yml` also carries a `concurrency` group, for the same reason at a different layer.
+Two pushes in quick succession ran two deploys, and the publish step is last-writer-wins by
+_finish_ time — so a slower earlier run could overwrite a faster later one and leave the site
+on the older commit. Grouping by ref serialises them; `cancel-in-progress: false` lets an
+in-flight publish complete rather than being torn down half-written, and GitHub keeps only the
+newest run queued behind it, so the newest commit still wins.
+
+Both halves of D60 are the same failure: CI that observes a problem it cannot prevent.
+
+The plan's stated ordering was `--check` → `rendercv render` → build → deploy. Only the
+`--check` half is implemented, deliberately: `render-cv.yml` **commits** the rendered PDF to
+the default branch, so calling it from deploy would make publishing a writing operation and
+widen exactly the carve-out D4 keeps narrow. The two stay independent and the rendercv half of
+the ordering claim is dropped rather than left as an unmet aspiration.
+
+### D61 — The plan's Phase 7 path-filter finding was overstated; the real gap was elsewhere
+
+The `[amended]` note on Phase 7 says a transform-only change "can silently fail to redeploy"
+because `_incoming/**` and `bin/transform.py` are missing from `deploy.yml`'s `paths:`. Checked
+pattern by pattern, that is mostly wrong: `**.yml`, `**.bib` and `**/*.md` already match
+`_incoming/cv.yml`, `_incoming/papers.src.bib`, `_incoming/blog/*.md`, and every generated
+file (`_data/*.yml`, `_bibliography/papers.bib`, `_books/*.md`, `_pages/*.md`). Under D4 the
+site is built from committed output, and that output was always matched.
+
+Genuinely unmatched were `_incoming/manifest.json` (`.json`) and `bin/*.py`. Both are now
+listed — cheap, and it means a transform change rebuilds even before its output is
+regenerated.
+
+**The real gap was in the other workflow.** `transform-check.yml` watched `bin/transform.py`
+by name, so Phase 4's new `bin/bibliography.py` was outside its `paths:` — a change to the
+entire bibliography pipeline would not have run the checks that cover it. Widened to `bin/**`,
+which is also immune to the next module being added.
+
+Recorded because the correction matters more than the fix: the plan named a plausible failure
+that was already handled, and the actual hole was one this repo's own later work created.
+
+---
+
 ## Owner action items (nothing in a commit can do these)
 
 GitHub Pages **cannot** build this site itself: it is gem-based (`theme: al_folio_core` plus
