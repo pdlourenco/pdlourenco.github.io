@@ -828,6 +828,55 @@ Two things that de-risk the switch, both worth knowing before it happens:
 
 ---
 
+## Phase 5 — Personal page and the bookshelf
+
+### D55 — The Personal page renders from data inline; no layout override was needed
+
+D18 predicted this and it held: `_pages/personal.md` loops over `site.data.personal` with
+`layout: page`, because `page.liquid` renders `{{ content }}` verbatim and Jekyll runs Liquid
+inside page content. A local `_layouts/personal.liquid` stays permitted (D5) and unused.
+
+The transform deliberately does **not** enumerate the properties of a Personal entry. The
+contract is open on purpose — this page is the site's distinguishing feature and its content
+is not a fixed schema — so properties are carried through and the page renders whatever is
+there. The only transformation is structural: `sections` becomes an ordered list, with the
+`_root` pseudo-section first, so rendering does not depend on mapping order surviving a YAML
+round-trip.
+
+### D56 — Reading is not rendered twice
+
+`personal.yml`'s `reading` page becomes `_books/*.md` and nothing else; the Personal page
+links to `/books/` rather than repeating the list. Same rule as D48: one fact, one source.
+
+### D57 — Front matter must open on line 1, so the ownership marker moves inside it
+
+Generated files carry `GENERATED_HEADER` on their first line, and `_is_ours()` reads that line
+to decide what the transform owns. That breaks for a Markdown file: Jekyll only parses front
+matter when `---` is the very first thing in the file, so a marker above it silently costs the
+page its layout — the `_books/` pages rendered unstyled until this was caught by building the
+site.
+
+Resolution: for front-matter files the marker is a **YAML comment on line 2**, inside the
+block, and `_is_ours()` scans the first three lines instead of only the first. Ownership,
+pruning and `--check` behave identically; only the marker's position moved.
+
+### D58 — Book dates are padded to a full date, and status is a closed set
+
+`book-shelf.liquid` groups on `item.started | date: '%Y'`. Liquid's `date` filter cannot parse
+a partial date and returns its input unchanged, so a `2026-07` start rendered the year
+_heading_ as "2026-07". Date-like book fields are padded (`2026` → `2026-01-01`,
+`2026-07` → `2026-07-01`).
+
+The shelf also colours the caption from a closed set — `abandoned, finished, interested,
+paused, queued, reading, reread` — and renders anything else as `UNCATEGORIZED` with no
+warning. So an unrecognised `status` is a transform error, and a missing one is inferred from
+the section header (`currently_reading` → `reading`).
+
+Both were found by rendering the page, not by reading the template. That is now the third
+Phase where a build caught something a read did not (D14, D45, and this).
+
+---
+
 ## Owner action items (nothing in a commit can do these)
 
 GitHub Pages **cannot** build this site itself: it is gem-based (`theme: al_folio_core` plus
