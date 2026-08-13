@@ -66,7 +66,7 @@ NOT_YET_CONSUMED: dict[str, str] = {}
 #: Everywhere this transform may own a file. Used by the normal prune pass *and* by the
 #: nothing-staged orphan scan — they were separate lists, and the orphan scan's omission of
 #: _bibliography meant a sourceless papers.bib passed --check (PR #5 audit, D42's rule).
-PRUNE_ROOT_NAMES = ("_data", "_bibliography", "_books")
+PRUNE_ROOT_NAMES = ("_data", "_bibliography", "_books", "_posts", "_projects", "_teachings")
 
 #: Files allowed in _incoming/ without appearing in the plugin's manifest. `README.md` is
 #: ours; `papers.src.bib` is exported from Zotero by hand and the plugin knows nothing about
@@ -189,6 +189,12 @@ def read_incoming(incoming: pathlib.Path) -> dict[str, Any]:
             continue
         problems += _validate(name, loaded)
         data[name] = loaded
+
+    blog_dir = incoming / "blog"
+    if blog_dir.is_dir():
+        data["blog"] = {
+            p.name: p.read_text(encoding="utf-8") for p in sorted(blog_dir.glob("*.md"))
+        }
 
     bib_path = incoming / "papers.src.bib"
     if bib_path.exists():
@@ -688,6 +694,142 @@ def build_socials(profile: dict) -> dict:
 
 
 # ---------------------------------------------------------------------------------------
+# blog/*.md -> _posts/*.md, and per-item collection pages
+# ---------------------------------------------------------------------------------------
+
+#: Jekyll requires this exact prefix to treat a file as a post and to date it. The plugin
+#: already names files this way; enforcing it here turns a rename into a loud failure rather
+#: than a post that silently never appears.
+POST_NAME = re.compile(r"^(\d{4}-\d{2}-\d{2})-[a-z0-9][a-z0-9-]*\.md$")
+
+#: Front matter `post.liquid` reads (verified against the installed gem). Anything else in
+#: the graph's front matter is passed through — the layout ignores what it does not know,
+#: and dropping it would lose content the author wrote.
+POST_KNOWN = frozenset(
+    {"title", "date", "description", "tags", "categories", "author", "toc", "meta",
+     "related_posts", "related_publications", "citation", "last_updated", "thumbnail"}
+)
+
+#: Markdown/HTML image references, so a broken path fails the transform rather than the page.
+IMAGE_REF = re.compile(r"!\[[^\]]*\]\(([^)\s]+)|<img[^>]+src=[\"']([^\"']+)")
+
+
+def build_posts(blog: dict[str, str], repo: pathlib.Path) -> dict[str, str]:
+    """`_incoming/blog/*.md` -> `_posts/*.md`. Returns {filename: content}.
+
+    The body is passed through untouched: it is the author's markdown, and rewriting it is
+    how a transform starts losing content. Only front matter is normalised, and only enough
+    that Jekyll and `post.liquid` recognise the file.
+    """
+    out, problems = {}, []
+    for name, text in sorted(blog.items()):
+        match = POST_NAME.match(name)
+        if not match:
+            problems.append(
+                f"{name!r} is not a Jekyll post filename (YYYY-MM-DD-slug.md). Jekyll would "
+                "not treat it as a post at all, so it would silently never appear."
+            )
+            continue
+        front, body = _split_front_matter(text)
+        if front is None:
+            problems.append(f"{name!r} has no YAML front matter, so it has no title or date.")
+            continue
+        if not front.get("title"):
+            problems.append(f"{name!r} has no title.")
+            continue
+        front.setdefault("date", match.group(1))
+        # `_config.yml` sets no layout default for _posts (only the news collection has one),
+        # so an unstated layout renders the raw body with no page furniture.
+        front["layout"] = "post"
+        problems += _check_asset_refs(name, body, repo)
+        out[name] = _markdown_page(front, body)
+    if problems:
+        raise TransformError("the staged blog posts cannot be transformed.", problems)
+    return out
+
+
+def _split_front_matter(text: str) -> tuple[dict | None, str]:
+    if not text.startswith("---"):
+        return None, text
+    parts = text.split("---", 2)
+    if len(parts) < 3:
+        return None, text
+    return (yaml.safe_load(parts[1]) or {}), parts[2].lstrip("\n")
+
+
+def _check_asset_refs(name: str, body: str, repo: pathlib.Path) -> list[str]:
+    """D22: a referenced image that is not in this repo is a loud failure, not a broken img."""
+    problems = []
+    for match in IMAGE_REF.finditer(body):
+        ref = match.group(1) or match.group(2) or ""
+        if not ref or "://" in ref or ref.startswith("data:"):
+            continue
+        target = repo / ref.lstrip("/")
+        if not target.exists():
+            problems.append(
+                f"{name}: references {ref!r}, which is not in this repo. Blog images live in "
+                "assets/img/posts/ and are added by hand (D22) — the reference is checked so "
+                "a missing image fails here rather than rendering broken."
+            )
+    return problems
+
+
+def _markdown_page(front: dict, body: str) -> str:
+    lines = ["---", GENERATED_HEADER]
+    for key, value in front.items():
+        dumped = yaml.dump(value, default_flow_style=True, allow_unicode=True).strip()
+        lines.append(f"{key}: {dumped.rstrip('...').strip()}")
+    lines += ["---", ""]
+    if body.strip():
+        lines += [body.rstrip(), ""]
+    return "\n".join(lines)
+
+
+#: A collection item gets its own page only when the graph says so. D23 requires per-item
+#: pages "only when wanted" but never said how that is signalled, and inventing a heuristic
+#: (has a description? has a url?) would generate pages nobody asked for. `page: true` is the
+#: marker; the schema is open, so it validates today (D62).
+PAGE_MARKER = "page"
+
+
+def build_collection_pages(cv: dict) -> dict[str, dict[str, str]]:
+    """`_projects/` and `_teachings/` entries, for items marked `page: true` (D23/D16)."""
+    out: dict[str, dict[str, str]] = {"_projects": {}, "_teachings": {}}
+    for entry in cv.get("projects") or []:
+        if not entry.get(PAGE_MARKER):
+            continue
+        name = val(entry, "name") or "untitled"
+        out["_projects"][f"{_slugify(name)}.md"] = _markdown_page(
+            _compact({
+                "layout": "page",
+                "title": name,
+                "description": val(entry, "description"),
+                "category": val(entry, "category"),
+                "importance": val(entry, "importance"),
+                "related_publications": val(entry, "related_publications"),
+            }),
+            "",
+        )
+    teaching = cv.get("teaching") or {}
+    for entry in teaching.get("courses") or []:
+        if not entry.get(PAGE_MARKER):
+            continue
+        name = val(entry, "name") or "untitled"
+        out["_teachings"][f"{_slugify(name)}.md"] = _markdown_page(
+            _compact({
+                "layout": "course",
+                "title": name,
+                "year": val(entry, "year"),
+                "term": val(entry, "term"),
+                "instructor": val(entry, "instructor"),
+                "location": val(entry, "location"),
+            }),
+            "",
+        )
+    return out
+
+
+# ---------------------------------------------------------------------------------------
 # personal.yml -> _data/personal.yml + _books/*.md
 # ---------------------------------------------------------------------------------------
 
@@ -1077,6 +1219,13 @@ def run(incoming: pathlib.Path, repo: pathlib.Path, check: bool) -> int:
         )
         for name, content in build_books(personal).items():
             outputs[repo / "_books" / name] = content
+    if "blog" in data:
+        for name, content in build_posts(data["blog"], repo).items():
+            outputs[repo / "_posts" / name] = content
+    if "cv.yml" in data:
+        for folder, pages in build_collection_pages(data["cv.yml"]).items():
+            for name, content in pages.items():
+                outputs[repo / folder / name] = content
     if "papers.src.bib" in data:
         outputs[repo / "_bibliography" / "papers.bib"] = build_bibliography(data, repo)
 
