@@ -311,6 +311,17 @@ def main() -> int:
                "T.build_posts({'2026-01-01-x.md': '---\\ntitle: [unclosed\\n---\\nb'},"
                " pathlib.Path('.'))", False, "not valid YAML")
 
+        # ---- the manifest exemption is a path, not a filename (D64) ------------------
+        repo_nested = fresh_repo(tmp)
+        nested = tmp / f"nested-{repo_nested.name}"
+        shutil.copytree(FIXTURES / "valid", nested)
+        (nested / "blog" / "README.md").write_text("not part of the export\n")
+        sneaky = transform(nested, repo_nested, "--check")
+        check("a README.md nested inside the export is NOT exempt — exemption is by exact "
+              "relative path, so the integrity check still sees it",
+              sneaky.returncode == 1 and "blog/README.md" in sneaky.stderr,
+              sneaky.stderr.strip()[-200:])
+
         # ---- idempotency: run twice, nothing changes ---------------------------------
         watched = [repo / name for name in ("_data", "_bibliography", "_books",
                                              "_posts", "_projects", "_teachings")]

@@ -48,6 +48,40 @@ repo's manual job via `_data/icon_map.yml` and `assets/img/logos/` (D22).
 **Numeric fields are integers**, already parsed: `level`, `speaking`, `understanding`,
 `writing`, `importance`.
 
+**An all-dropped document is `{}`, not zero bytes.** When every key of a document is dropped,
+the plugin writes a literal `{}`. Whole documents only — a nested `key:` with a null value
+stays as it is, because absent-vs-null equivalence above is load-bearing.
+
+This is a contract guarantee rather than a consumer requirement: `bin/transform.py` reads an
+empty file as `{}` anyway, and all four content schemas accept `{}`. The point is that the
+format should not depend on a consumer being tolerant, and that a zero-byte file stays
+available as a signal that something went wrong (`docs/DECISIONS.md` D65).
+
+## Staging lifecycle — who may delete what in `_incoming/`
+
+`_incoming/` is **not exclusively the plugin's**. `papers.src.bib` is staged from Zotero by
+hand on a different cadence, and `README.md` belongs to this repo. Both are exempt from the
+manifest's file-list check, **by exact relative path** — a nested `blog/README.md` is not
+exempt, and is a hard error like any other unlisted file.
+
+Because the export is not the only writer, **the plugin must not clear the directory**. It
+prunes by the _previous_ `manifest.json`'s `files` list — exactly the paths it last wrote,
+nothing else — and writes its own manifest **last**, so the manifest is the commit point and a
+crashed export leaves the previous one intact for the next run to prune by. An unreadable or
+unknown-version previous manifest prunes nothing. See `docs/DECISIONS.md` D64.
+
+> ⚠️ **Agreed, not yet implemented.** Today's `sync.sh` prunes nothing and writes
+> `manifest.json` **before** the blog posts, which violates the ordering rule above on its own.
+> Until the plugin lands D64, a dropped page leaves a stale file behind and the next
+> `bin/transform.py` run fails with "present but not listed" — that error is currently a
+> **normal consequence of a deletion**, not necessarily a mistake, and the fix is to remove the
+> stale file by hand. Tracked in the companion repo alongside the D29 `schema_version` gap.
+
+Once the plugin implements it, the consequence for this repo is that `_incoming/` stops
+accumulating stale files across exports, and "present but not listed" goes back to meaning
+only what it should: a partial copy, or a file placed by hand that the plugin does not know
+about.
+
 ## Versioning
 
 `manifest.json` carries `schema_version` — an integer, currently **1**. The transform refuses a
