@@ -1034,6 +1034,79 @@ Two things are hard errors rather than best-effort:
 
 ---
 
+## Contract lifecycle — decided with the plugin
+
+### D64 — The plugin prunes `_incoming/` by the _previous_ manifest, and writes its own last
+
+An export that drops a blog post leaves the old file in `_incoming/`, unlisted by the new
+manifest, which `_check_export_integrity` treats as a hard error. Something has to remove it,
+and the obvious answer is wrong: **`_incoming/` is not exclusively the plugin's.**
+`papers.src.bib` is staged from Zotero by hand on a different cadence (D49/D49b) and
+`README.md` is ours, so "clear the directory before writing" would delete hand-maintained
+input on every sync.
+
+The plugin therefore reads the existing `_incoming/manifest.json` before overwriting anything,
+deletes exactly the paths in its `files` list, then writes the new export. It never touches a
+file it did not previously write. Widening `MANIFEST_EXEMPT` was rejected for the reason its
+own comment gives — it is the check standing between a partial copy and a half-built site.
+
+Three properties make it safe, and the ordering one is load-bearing:
+
+1. **The manifest is written last.** It is the commit point. Written first, a crashed export
+   leaves a manifest naming files that do not exist _and_ destroys the only record of what the
+   previous export owned, stranding the stale files permanently. Files first, prune, manifest
+   last means a crash leaves the previous manifest intact and a re-run is still correct.
+2. **An unreadable previous manifest prunes nothing**, and says so — unparseable, missing
+   `files`, or an unknown `schema_version` are all treated as "no previous export". Pruning by
+   a list you do not understand is worse than not pruning.
+3. **Only listed file paths are removed**, never directories, and an already-absent entry is
+   not an error. Leftover empty directories are harmless: the integrity check filters on
+   `is_file()`.
+
+The one case this gets wrong is a hand-placed file that a past export also listed. Checked
+against history before adopting: `_incoming/README.md` is the only file ever committed there
+and `papers.src.bib` has never been staged, so the case is currently vacuous.
+
+**Known better shape, deliberately not taken yet.** Exporting into a plugin-owned subdirectory
+(`_incoming/graph/`) would make ownership positional rather than an allowlist, and would make
+that failure case structurally impossible instead of merely unlikely — the D62b lesson again.
+It costs a contract v2 and a transform change, and D64 is correct without it. The trigger to
+revisit is hand-staging in `_incoming/` growing beyond those two files.
+
+**Fixed here while deciding this:** `MANIFEST_EXEMPT` was matched against `p.name`, so a
+`README.md` _anywhere_ in the tree — `blog/README.md` — was silently exempt from the integrity
+check. It is now matched on the exact relative path, with a test. D64's safety argument leans
+on that set being exactly what it claims to be.
+
+### D65 — An all-dropped document serialises to `{}`, not to zero bytes
+
+When every key of a mapping is dropped, the plugin writes `{}` rather than an empty file.
+Scoped to a **whole document only** — a nested `key:` with a null value is untouched, because
+D28 makes explicit-null and absent equivalent here and changing that would be a semantic
+change rather than a spelling one.
+
+The rationale is narrower than it first looked, and worth recording accurately because the
+obvious argument is wrong. `bin/transform.py` does `yaml.safe_load(text) or {}`, so an empty
+file _already_ becomes `{}`, and none of the four content schemas set `required` or
+`minProperties`, so `{}` validates cleanly. **The two spellings are indistinguishable to this
+consumer.** The "an empty file fails loudly" reasoning that first motivated this was simply
+untrue.
+
+Nor is the truncation argument as strong as it sounds: a zero-byte file has a well-defined
+sha256, so if the manifest lists that file's hash, truncation is caught already. That gap only
+opens when `hashes` is absent — which the schema permits, since only `schema_version`,
+`exported_at` and `files` are required.
+
+What remains, and what actually decides it: **`or {}` is this consumer's defence, not the
+format's guarantee.** The intermediate YAML is a versioned API, and `bin/transform.py`
+happening to be tolerant is not a property the format should lean on. `{}` is self-describing
+under any consumer, and costs nothing.
+
+No transform change: both spellings were already handled, which is why this is recorded as a
+contract fact rather than a code change.
+
+---
+
 ## Owner action items (nothing in a commit can do these)
 
 GitHub Pages **cannot** build this site itself: it is gem-based (`theme: al_folio_core` plus

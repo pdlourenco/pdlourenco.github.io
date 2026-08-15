@@ -48,6 +48,33 @@ repo's manual job via `_data/icon_map.yml` and `assets/img/logos/` (D22).
 **Numeric fields are integers**, already parsed: `level`, `speaking`, `understanding`,
 `writing`, `importance`.
 
+**An all-dropped document is `{}`, not zero bytes.** When every key of a document is dropped,
+the plugin writes a literal `{}`. Whole documents only — a nested `key:` with a null value
+stays as it is, because absent-vs-null equivalence above is load-bearing.
+
+This is a contract guarantee rather than a consumer requirement: `bin/transform.py` reads an
+empty file as `{}` anyway, and all four content schemas accept `{}`. The point is that the
+format should not depend on a consumer being tolerant, and that a zero-byte file stays
+available as a signal that something went wrong (`docs/DECISIONS.md` D65).
+
+## Staging lifecycle — who may delete what in `_incoming/`
+
+`_incoming/` is **not exclusively the plugin's**. `papers.src.bib` is staged from Zotero by
+hand on a different cadence, and `README.md` belongs to this repo. Both are exempt from the
+manifest's file-list check, **by exact relative path** — a nested `blog/README.md` is not
+exempt, and is a hard error like any other unlisted file.
+
+Because the export is not the only writer, **the plugin must not clear the directory**. It
+prunes by the _previous_ `manifest.json`'s `files` list — exactly the paths it last wrote,
+nothing else — and writes its own manifest **last**, so the manifest is the commit point and a
+crashed export leaves the previous one intact for the next run to prune by. An unreadable or
+unknown-version previous manifest prunes nothing. See `docs/DECISIONS.md` D64.
+
+The consequence for this repo: `_incoming/` does not accumulate stale files across exports,
+and the integrity check's "present but not listed" error should therefore only ever fire on a
+genuine mistake — a partial copy, or a file placed by hand that the plugin does not know
+about.
+
 ## Versioning
 
 `manifest.json` carries `schema_version` — an integer, currently **1**. The transform refuses a

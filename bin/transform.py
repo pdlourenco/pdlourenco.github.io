@@ -72,6 +72,11 @@ PRUNE_ROOT_NAMES = ("_data", "_bibliography", "_books", "_posts", "_projects", "
 #: ours; `papers.src.bib` is exported from Zotero by hand and the plugin knows nothing about
 #: it (D49). Kept deliberately narrow so a plugin that later emits a bibliography still
 #: round-trips through the integrity check.
+#:
+#: These are **relative paths, matched exactly**, not filenames. Matching on `p.name` meant a
+#: `README.md` anywhere in the tree — `blog/README.md`, say — was silently exempt from the
+#: integrity check, which is the one check standing between a partial copy and a half-built
+#: site (D64).
 MANIFEST_EXEMPT = frozenset({"README.md", "papers.src.bib"})
 
 #: Section titles al_folio_cv special-cases. Anything else falls to its generic branch,
@@ -130,7 +135,9 @@ def read_incoming(incoming: pathlib.Path) -> dict[str, Any]:
     # When the staged files are only ones the plugin never emits, there is no manifest to
     # verify against and demanding one would block the workflow entirely (PR #5 audit).
     if not manifest_path.exists():
-        staged = {p.name for p in incoming.iterdir() if p.is_file()}
+        staged = {
+            str(p.relative_to(incoming)) for p in incoming.rglob("*") if p.is_file()
+        }
         if staged and staged <= MANIFEST_EXEMPT:
             data: dict[str, Any] = {}
             bib_only = incoming / "papers.src.bib"
@@ -216,7 +223,7 @@ def _check_export_integrity(incoming: pathlib.Path, manifest: dict) -> list[str]
     present = {
         str(p.relative_to(incoming))
         for p in incoming.rglob("*")
-        if p.is_file() and p.name not in MANIFEST_EXEMPT
+        if p.is_file() and str(p.relative_to(incoming)) not in MANIFEST_EXEMPT
     }
     for missing in sorted(listed - present):
         problems.append(f"manifest lists {missing!r} but it is not in {incoming}/")
