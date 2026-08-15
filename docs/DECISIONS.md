@@ -311,7 +311,16 @@ for every third-party embed, so the unknown costs nothing.
 `sync.sh` is the authority because it is the thing that copies the files. `seed.md` is frozen
 and not corrected in place (per its precedence note); this entry is the correction.
 
-### D21 — `sync.sh` currently violates the pipeline contract and must be changed in the plugin repo
+### D21 — `sync.sh` violated the pipeline contract — **resolved upstream**
+
+> **Resolved.** Verified directly at plugin HEAD `f9b781c`: `sync.sh` now copies into
+> `<site>/_incoming/` only, and requires `--site` explicitly with no default "so a stray run
+> cannot touch a real site repo by accident". The overwrite hazard below is historical. It does
+> **not** yet implement D64 — the manifest is copied before the blog posts and nothing is
+> pruned — but that is a staleness bug, not a destructive one. Running it is now safe.
+>
+> Kept rather than deleted because the owner action item it produced stood for several phases,
+> and because the original finding is the reason the boundary exists.
 
 Found while resolving D20, and the most consequential Phase 1 finding: **`sync.sh` copies the
 export straight into `_data/` and `_posts/`**, with `manifest.json` renamed to
@@ -1123,7 +1132,11 @@ hand — see `docs/al-folio/INSTALL.md` §Deployment:
 5. Content the site cannot invent: a profile photo (drop it in `assets/img/` and name it in
    `_pages/about.md`), the About bio, and `email:` in `_data/socials.yml`. All three are
    deliberately left blank rather than guessed.
-6. ⚠️ **Do not run the plugin's `sync.sh` against this repository yet.** As written it copies
+6. ✅ ~~**Do not run the plugin's `sync.sh` against this repository yet.**~~ **Resolved** — see
+   D21. `sync.sh` at plugin HEAD `f9b781c` copies into `_incoming/` only and refuses to run
+   without an explicit `--site`, so it is safe to use. It does not yet prune stale files or
+   write its manifest last (D64), so a deletion in the graph still needs the leftover file
+   removed by hand until that lands. Original text follows for the record: as written it copied
    the Logseq export straight into `_data/` and `_posts/`, which overwrites generated files and
    would leave the CV page rendering intermediate-format YAML it cannot read — see **D21**. Copy
    the export directory to `_incoming/` by hand until the plugin repo is updated.

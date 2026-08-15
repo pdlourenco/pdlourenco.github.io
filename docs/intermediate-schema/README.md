@@ -70,9 +70,16 @@ nothing else — and writes its own manifest **last**, so the manifest is the co
 crashed export leaves the previous one intact for the next run to prune by. An unreadable or
 unknown-version previous manifest prunes nothing. See `docs/DECISIONS.md` D64.
 
-The consequence for this repo: `_incoming/` does not accumulate stale files across exports,
-and the integrity check's "present but not listed" error should therefore only ever fire on a
-genuine mistake — a partial copy, or a file placed by hand that the plugin does not know
+> ⚠️ **Agreed, not yet implemented.** Today's `sync.sh` prunes nothing and writes
+> `manifest.json` **before** the blog posts, which violates the ordering rule above on its own.
+> Until the plugin lands D64, a dropped page leaves a stale file behind and the next
+> `bin/transform.py` run fails with "present but not listed" — that error is currently a
+> **normal consequence of a deletion**, not necessarily a mistake, and the fix is to remove the
+> stale file by hand. Tracked in the companion repo alongside the D29 `schema_version` gap.
+
+Once the plugin implements it, the consequence for this repo is that `_incoming/` stops
+accumulating stale files across exports, and "present but not listed" goes back to meaning
+only what it should: a partial copy, or a file placed by hand that the plugin does not know
 about.
 
 ## Versioning
