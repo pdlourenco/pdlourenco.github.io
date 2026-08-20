@@ -6,6 +6,20 @@ Resolved decisions, newest section last. **This file is the highest authority**:
 Each entry records what was decided and why, so a later session does not re-litigate it. A
 decision that turns out wrong should be superseded by a new entry, not edited away.
 
+> **Read every claim about the companion plugin as dated, and re-verify it before acting.**
+> This repo and `pdlourenco/logseq-alfolio-export` are **both greenfield and being built at the
+> same time** — neither is a stable dependency of the other, and the site is deployed but holds
+> no real content yet. Entries here have twice described the plugin's state accurately and then
+> been overtaken within days: D21 warned against running `sync.sh` for several phases after the
+> hazard was fixed, and D64's "implemented on neither side" outlived its subject by two merges.
+>
+> Both failures share a cause, and it is not carelessness alone: a counterparty that ships on
+> its own schedule was being treated as a fixed dependency whose status is checked once. The
+> `⚠️ not yet implemented` convention only catches claims that are **not yet true**; nothing
+> catches one that is **no longer true**. So when a decision's next step depends on plugin
+> behaviour, check the plugin at HEAD — the SHA in the entry is when it was last looked at, not
+> a guarantee.
+
 ---
 
 ## Phase 0 — Bootstrap
@@ -1215,12 +1229,22 @@ cheap and the gem findings are banked in `SCHEMA-NOTES.md` either way. The docum
 is the real one: those entries need marking as superseded, or this becomes a third instance of
 the staleness problem (D21, D64).
 
-**Sequencing, if adopted — this is the part that can lose content.** The prose half must be
-re-authored in this repo **before** the plugin stops emitting it. D64's prune removes exactly
-what the previous manifest listed, so an export that drops `personal.yml` deletes the staged
-copy, and the transform prunes the generated pages behind it. Both steps are individually
-correct, and together they open a window in which the only copy of that prose is in the graph.
-Re-author first, stop exporting second.
+**Sequencing, if adopted — real in principle, vacuous today, and that is the point.** The rule
+is that the prose half must be re-authored here **before** the plugin stops emitting it: D64's
+prune removes what the previous manifest listed, and the transform prunes the generated pages
+behind it. Both steps are individually correct, and together they would open a window in which
+the only copy of that prose is in the graph.
+
+**There is nothing in that window right now.** Checked: no `_posts/`, no `_books/`, no
+`_data/cv.yml` or `_data/personal.yml`, `_bibliography/papers.bib` still the Phase 0
+placeholder, and `_incoming/` still holding only its README. Nothing has ever been committed to
+those paths. The site is deployed but empty, and the plugin has not run against a real graph in
+anger either — **both sides are greenfield, being built simultaneously.**
+
+So the migration cost of narrowing is **zero today** and rises with every page authored through
+the prose pipeline. That is an argument for deciding sooner rather than later, and it is the
+opposite of what a sequencing warning usually implies. The warning is worth keeping for the day
+content exists; it should not be read as a reason to wait.
 
 **Corrections to this entry's own advice, after the plugin session replied.** Two claims here
 were verified against plugin `f9b781c` and were two merges stale when written:
