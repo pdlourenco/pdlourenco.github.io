@@ -464,10 +464,21 @@ would be a breaking shape change for no gain, and would force a `schema_version`
 `manifest.json` must carry `schema_version` (integer, currently `1`). The transform refuses a
 version it does not know **and** an export with no version at all, rather than guessing.
 
-The plugin does not emit it yet, so today's real output is invalid against the contract. That is
-recorded rather than papered over: `test/fixtures/incoming/legacy-unversioned/` holds the actual
-current export and the validator asserts it fails **specifically on `schema_version`**. When the
-plugin adds the field, promote that fixture instead of loosening the schema.
+> **✅ Resolved upstream** at plugin `a6f769f` — `index.js:1245` emits
+> `schema_version: SCHEMA_VERSION`. The plugin session reports validating a real export against
+> these schemas and running `bin/transform.py` over it end to end: manifest valid, both-
+> directions file check clean, hashes recomputed, exit 0.
+>
+> **This repeals the advice this entry produced.** "`schema_version` is the blocker — nothing
+> processes until it lands" was true when written and is now simply wrong; the pipeline runs
+> today. `legacy-unversioned/` stays exactly as it is, because its job changed rather than
+> ended: it is no longer "the actual current export", it is the **regression fixture** proving
+> the gate still fires. Keeping it means a future plugin that stops emitting the field is
+> caught rather than silently accepted, so it should not be promoted.
+
+The plugin did not emit it at first, so early real output was invalid against the contract. That
+was recorded rather than papered over: `test/fixtures/incoming/legacy-unversioned/` holds such an
+export and the validator asserts it fails **specifically on `schema_version`**.
 
 Breaking shape changes increment the version; additive optional fields do not — which is why
 entry objects set `additionalProperties: true` and `hashes` is optional-but-validated. A plugin
@@ -886,6 +897,26 @@ stands — the owner asked for the page; it just does not go in the nav while it
 
 ### D55 — The Personal page renders from data inline; no layout override was needed
 
+> **Corrected after checking the plugin.** A later change removed two `sorted()` calls from
+> `build_personal` on the stated grounds that "the graph's order is the author's editorial
+> order". That is **half true**, and the half that is false was asserted about a counterparty
+> without reading it — the same error D64 names.
+>
+> The plugin has _two_ orderings, not one (`sortExport`, plugin `index.js:598-618`):
+>
+> | what               | plugin                                     | consequence here                                     |
+> | ------------------ | ------------------------------------------ | ---------------------------------------------------- |
+> | page keys          | `sortKeys()` — **alphabetised**            | authored order never arrives; not sorting is a no-op |
+> | sections in a page | **authored order preserved**, deliberately | not sorting is load-bearing                          |
+>
+> So removing the _section_ sort was a real fix; removing the _page_ sort was a no-op wearing a
+> rationale. Both are kept — the page one because it is the correct no-op, staying right if the
+> plugin ever stops sorting — but the comment now says which is which.
+>
+> The fixture was also unrepresentative: its pages were in an order `sortKeys` cannot produce.
+> Page keys are now alphabetical, sections keep authored order (`diy` is tools-then-projects),
+> and a test pins the half that matters.
+
 D18 predicted this and it held: `_pages/personal.md` loops over `site.data.personal` with
 `layout: page`, because `page.liquid` renders `{{ content }}` verbatim and Jekyll runs Liquid
 inside page content. A local `_layouts/personal.liquid` stays permitted (D5) and unused.
@@ -1047,6 +1078,16 @@ Two things are hard errors rather than best-effort:
 
 ### D64 — The plugin prunes `_incoming/` by the _previous_ manifest, and writes its own last
 
+> **Status: ✅ implemented upstream** at plugin `a6f769f` (landed in PR 2.5, `d0a928b`).
+> Verified directly rather than taken on report: `sync.sh` has a `PRUNE` branch that removes
+> files only, tolerates an already-absent entry and leaves empty directories alone, and
+> `cp manifest.json` runs **after** the copy/prune loop — the ordering rule as agreed.
+>
+> This entry previously carried a not-yet-implemented warning, and that warning outlived its
+> subject by two merges because the status was verified once and never re-checked. Which is
+> D21's failure, not D49's: the convention catches _not yet true_, and nothing catches _no
+> longer true_. Both directions need a re-read when the counterparty ships.
+
 An export that drops a blog post leaves the old file in `_incoming/`, unlisted by the new
 manifest, which `_check_export_integrity` treats as a hard error. Something has to remove it,
 and the obvious answer is wrong: **`_incoming/` is not exclusively the plugin's.**
@@ -1113,6 +1154,9 @@ under any consumer, and costs nothing.
 
 No transform change: both spellings were already handled, which is why this is recorded as a
 contract fact rather than a code change.
+
+**✅ Implemented upstream** at plugin `a6f769f` — `index.js:53` and `:82` emit `{}`, correctly
+scoped to the root document (`indent === 0`), leaving nested nulls untouched as agreed.
 
 ---
 

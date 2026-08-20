@@ -937,9 +937,14 @@ def build_personal(personal: dict) -> dict:
     ordered list so the page does not depend on mapping order surviving YAML round-trips.
     """
     out: dict[str, Any] = {}
-    # NOT sorted: the graph's order is the author's editorial order, and this is the page
-    # whose whole point is narrative. Mapping insertion order is preserved by the YAML
-    # loader and is deterministic, so --check stays stable without alphabetising (PR #6).
+    # NOT sorted — but for a narrower reason than first recorded, because the plugin's two
+    # orderings differ (D55, corrected):
+    #   * page keys arrive **already alphabetised** (`sortKeys(personalPages)` upstream), so
+    #     preserving input order here is a no-op today. It is kept because it is the correct
+    #     no-op: if the plugin ever stops sorting, authored order reaches the page untouched.
+    #   * section order inside a page **is** authored order, which the plugin deliberately
+    #     preserves — so this must not alphabetise it. That half is load-bearing now.
+    # Input order is deterministic either way, so --check stays stable.
     for slug, page in personal.items():
         if slug == BOOKS_PAGE:
             continue

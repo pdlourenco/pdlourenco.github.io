@@ -155,6 +155,12 @@ def main() -> int:
                   set(pages) == {"music", "cycling_and_hiking", "diy"}, str(sorted(pages)))
             check("the _root pseudo-section leads, before the named ones",
                   pages["music"]["sections"][0]["slug"] == "_root")
+            # The plugin preserves authored section order and alphabetises page keys — two
+            # different rules (D55). Only the first is ours to protect: `diy` is authored
+            # tools-then-projects, which is NOT alphabetical, so a sort here would show up.
+            check("authored section order survives — it is not alphabetised",
+                  [s["slug"] for s in pages["diy"]["sections"]] == ["tools", "projects"],
+                  str([s["slug"] for s in pages["diy"]["sections"]]))
             check("an ampersand slug round-trips to a readable title",
                   pages["cycling_and_hiking"]["title"] == "Cycling & Hiking")
             check("page-level profiles become links that always have a url (D19)",
