@@ -6,6 +6,20 @@ Resolved decisions, newest section last. **This file is the highest authority**:
 Each entry records what was decided and why, so a later session does not re-litigate it. A
 decision that turns out wrong should be superseded by a new entry, not edited away.
 
+> **Read every claim about the companion plugin as dated, and re-verify it before acting.**
+> This repo and `pdlourenco/logseq-alfolio-export` are **both greenfield and being built at the
+> same time** — neither is a stable dependency of the other, and the site is deployed but holds
+> no real content yet. Entries here have twice described the plugin's state accurately and then
+> been overtaken within days: D21 warned against running `sync.sh` for several phases after the
+> hazard was fixed, and D64's "implemented on neither side" outlived its subject by two merges.
+>
+> Both failures share a cause, and it is not carelessness alone: a counterparty that ships on
+> its own schedule was being treated as a fixed dependency whose status is checked once. The
+> `⚠️ not yet implemented` convention only catches claims that are **not yet true**; nothing
+> catches one that is **no longer true**. So when a decision's next step depends on plugin
+> behaviour, check the plugin at HEAD — the SHA in the entry is when it was last looked at, not
+> a guarantee.
+
 ---
 
 ## Phase 0 — Bootstrap
@@ -464,10 +478,21 @@ would be a breaking shape change for no gain, and would force a `schema_version`
 `manifest.json` must carry `schema_version` (integer, currently `1`). The transform refuses a
 version it does not know **and** an export with no version at all, rather than guessing.
 
-The plugin does not emit it yet, so today's real output is invalid against the contract. That is
-recorded rather than papered over: `test/fixtures/incoming/legacy-unversioned/` holds the actual
-current export and the validator asserts it fails **specifically on `schema_version`**. When the
-plugin adds the field, promote that fixture instead of loosening the schema.
+> **✅ Resolved upstream** at plugin `a6f769f` — `index.js:1245` emits
+> `schema_version: SCHEMA_VERSION`. The plugin session reports validating a real export against
+> these schemas and running `bin/transform.py` over it end to end: manifest valid, both-
+> directions file check clean, hashes recomputed, exit 0.
+>
+> **This repeals the advice this entry produced.** "`schema_version` is the blocker — nothing
+> processes until it lands" was true when written and is now simply wrong; the pipeline runs
+> today. `legacy-unversioned/` stays exactly as it is, because its job changed rather than
+> ended: it is no longer "the actual current export", it is the **regression fixture** proving
+> the gate still fires. Keeping it means a future plugin that stops emitting the field is
+> caught rather than silently accepted, so it should not be promoted.
+
+The plugin did not emit it at first, so early real output was invalid against the contract. That
+was recorded rather than papered over: `test/fixtures/incoming/legacy-unversioned/` holds such an
+export and the validator asserts it fails **specifically on `schema_version`**.
 
 Breaking shape changes increment the version; additive optional fields do not — which is why
 entry objects set `additionalProperties: true` and `hashes` is optional-but-validated. A plugin
@@ -886,6 +911,38 @@ stands — the owner asked for the page; it just does not go in the nav while it
 
 ### D55 — The Personal page renders from data inline; no layout override was needed
 
+> **Corrected after checking the plugin.** A later change removed two `sorted()` calls from
+> `build_personal` on the stated grounds that "the graph's order is the author's editorial
+> order". That is **half true**, and the half that is false was asserted about a counterparty
+> without reading it — the same error D64 names.
+>
+> The plugin has _two_ orderings, not one (`sortExport`, plugin `index.js:598-618`):
+>
+> | what               | plugin                                     | consequence here                                     |
+> | ------------------ | ------------------------------------------ | ---------------------------------------------------- |
+> | page keys          | `sortKeys()` — **alphabetised**            | authored order never arrives; not sorting is a no-op |
+> | sections in a page | **authored order preserved**, deliberately | not sorting is load-bearing                          |
+>
+> So removing the _section_ sort was a real fix; removing the _page_ sort was a no-op wearing a
+> rationale. Both are kept — the page one because it is the correct no-op, staying right if the
+> plugin ever stops sorting — but the comment now says which is which.
+>
+> The fixture was also unrepresentative: its pages were in an order `sortKeys` cannot produce.
+> Page keys are now alphabetical, sections keep authored order (`diy` is tools-then-projects),
+> and a test pins the half that matters.
+>
+> **And the asymmetry is justified — I was wrong to call it arbitrary.** Having read only my
+> own side, I suggested the plugin drop `sortKeys(personalPages)` so authored page order could
+> reach the site. The plugin session tested it: dropping it **fails their permutation-invariance
+> property test**, because `personalPages` is built by iterating `getAllPages()`, so its key
+> order is an _index artifact_ with no authored meaning. Section order is different in kind —
+> it is document order in the markdown, which the author really did choose.
+>
+> So sorting pages while preserving sections is principled: **sort what has no meaningful
+> order, preserve what does.** That is a better rule than the one I proposed, and it came from
+> running the test rather than reasoning about it — the same discipline I had just failed to
+> apply in the other direction.
+
 D18 predicted this and it held: `_pages/personal.md` loops over `site.data.personal` with
 `layout: page`, because `page.liquid` renders `{{ content }}` verbatim and Jekyll runs Liquid
 inside page content. A local `_layouts/personal.liquid` stays permitted (D5) and unused.
@@ -1047,6 +1104,16 @@ Two things are hard errors rather than best-effort:
 
 ### D64 — The plugin prunes `_incoming/` by the _previous_ manifest, and writes its own last
 
+> **Status: ✅ implemented upstream** at plugin `a6f769f` (landed in PR 2.5, `d0a928b`).
+> Verified directly rather than taken on report: `sync.sh` has a `PRUNE` branch that removes
+> files only, tolerates an already-absent entry and leaves empty directories alone, and
+> `cp manifest.json` runs **after** the copy/prune loop — the ordering rule as agreed.
+>
+> This entry previously carried a not-yet-implemented warning, and that warning outlived its
+> subject by two merges because the status was verified once and never re-checked. Which is
+> D21's failure, not D49's: the convention catches _not yet true_, and nothing catches _no
+> longer true_. Both directions need a re-read when the counterparty ships.
+
 An export that drops a blog post leaves the old file in `_incoming/`, unlisted by the new
 manifest, which `_check_export_integrity` treats as a hard error. Something has to remove it,
 and the obvious answer is wrong: **`_incoming/` is not exclusively the plugin's.**
@@ -1113,6 +1180,121 @@ under any consumer, and costs nothing.
 
 No transform change: both spellings were already handled, which is why this is recorded as a
 contract fact rather than a code change.
+
+**✅ Implemented upstream** at plugin `a6f769f` — `index.js:53` and `:82` emit `{}`, correctly
+scoped to the root document (`indent === 0`), leaving nested nulls untouched as agreed.
+
+---
+
+## Open proposal — pipeline scope
+
+### D66 — Narrowing the pipeline to entity data: assessed, **not yet decided**
+
+> **Status: this is an assessment of an open proposal, not a decision.** Nothing here binds
+> anything, and no code has been removed. Recorded so the reasoning is not re-derived, and
+> marked because writing a proposal up as settled is the failure mode D64 names. Tracked as
+> [#10](https://github.com/pdlourenco/pdlourenco.github.io/issues/10) with companion
+> `pdlourenco/logseq-alfolio-export#8`.
+
+The proposal: narrow the Logseq pipeline to **entity data** (CV, profile, publication
+overrides) and author **narrative content** — blog, project write-ups, the Personal page,
+books — directly as markdown in this repo. "The site is a projection of the graph" becomes
+"the CV is a projection of the graph".
+
+**The assessment is favourable, and the strongest evidence is in the code it would delete:**
+
+- **D55 is the schema admitting defeat.** `build_personal` deliberately does not enumerate
+  properties, because "the contract is open on purpose — this page's content is not a fixed
+  schema". A schema whose defining property is that it declines to constrain anything is what
+  modelling non-entity data looks like.
+- **The blog pipeline was already split.** D22 puts images in this repo while prose came from
+  the graph, and `_check_asset_refs` exists only to catch the mismatch that split creates.
+- **`build_posts` barely earns its keep.** Of its four jobs — copy the body, inject `layout`,
+  default `date` from the filename, validate filename and image refs — three are needed _only
+  because_ the file took a trip through the graph.
+
+**The problem the proposal does not address, and the rule that fixes it.** D23 generates
+project detail pages from the same intermediate entries that feed the CV's Projects section.
+Hand-authoring the detail page while the CV entry stays generated gives one project two
+sources — the duplication D23 and D48 exist to prevent. Proposed rule, should the narrowing be
+adopted:
+
+> **The graph owns the record; the repo owns the write-up.** A project's CV entry stays
+> generated (name, dates, institution, importance) and carries a `url` pointing at its
+> hand-authored page. Different content, one source each.
+
+Rejecting the alternative — projects leaving the graph entirely — because it costs the CV a
+Projects section, which is real CV content.
+
+**On `personal.yml`:** it would be _absorbed_, not deleted. Its link properties (`lastfm`,
+`wikiloc`, `strava`, `goodreads`) are identity data that already has a home in `profile.yml` →
+`_data/socials.yml`, and `build_socials` already handles that `{id, url}` shape. The prose
+becomes `_pages/personal.md`.
+
+**One of the proposal's open questions is already closed:** D17 settled native `_books/` over
+Goodreads, with the mechanics verified against the gem. Narrowing changes where entries come
+from, not the mechanism.
+
+**Cost if adopted:** four functions from `bin/transform.py` (~300 lines) and ~25 checks, and
+D55–D58, D62, D63 and half of D65 become historical. Sunk cost should not weigh — the code was
+cheap and the gem findings are banked in `SCHEMA-NOTES.md` either way. The documentation cost
+is the real one: those entries need marking as superseded, or this becomes a third instance of
+the staleness problem (D21, D64).
+
+**Sequencing, if adopted — real in principle, vacuous today, and that is the point.** The rule
+is that the prose half must be re-authored here **before** the plugin stops emitting it: D64's
+prune removes what the previous manifest listed, and the transform prunes the generated pages
+behind it. Both steps are individually correct, and together they would open a window in which
+the only copy of that prose is in the graph.
+
+**There is nothing in that window right now.** Checked: no `_posts/`, no `_books/`, no
+`_data/cv.yml` or `_data/personal.yml`, `_bibliography/papers.bib` still the Phase 0
+placeholder, and `_incoming/` still holding only its README. Nothing has ever been committed to
+those paths. The site is deployed but empty, and the plugin has not run against a real graph in
+anger either — **both sides are greenfield, being built simultaneously.**
+
+So the migration cost of narrowing is **zero today** and rises with every page authored through
+the prose pipeline. That is an argument for deciding sooner rather than later, and it is the
+opposite of what a sequencing warning usually implies. The warning is worth keeping for the day
+content exists; it should not be read as a reason to wait.
+
+**Corrections to this entry's own advice, after the plugin session replied.** Two claims here
+were verified against plugin `f9b781c` and were two merges stale when written:
+
+| claim                                                               | actual, at `a6f769f`                                                    |
+| ------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| "`schema_version` is the blocker; nothing processes until it lands" | **repealed** — emitted since PR 2.5; the pipeline runs end to end (D29) |
+| D64/D65 "implemented on neither side"                               | **both shipped** upstream (D64, D65)                                    |
+
+Also settled by that reply: the `website::` opt-in tag and the served hostname have **no
+coupling** in either direction — the plugin never treats `websiteName` as a hostname, and this
+repo's `cv.website` comes from `profile.web.url`, not `manifest.website` (verified at
+`bin/transform.py:629`). A custom domain later changes nothing.
+
+The seam is **adopted on the plugin side**, and is cheaper than estimated: `lastfm` and
+`soundcloud` were already in its `linkKeys` list, so absorbing the rest is three strings.
+The projects rule needs no plugin change either — its project entries already carry `url`.
+
+**The seam has an ordering constraint of its own, and this one is not vacuous.** `build_socials`
+raises on any `profile.yml` key it has no mapping for (D41) — so if the plugin adds `wikiloc`,
+`strava` or `goodreads` to its `linkKeys` before those mappings exist here, the next export
+**hard-fails the site build**. The site side must land first.
+
+It has: `strava` → `strava_userid` (a real jekyll-socials key), and `wikiloc` + `goodreads` →
+the custom `{logo, title, url}` form, because checking the gem shows neither has a built-in key
+**in any spelling** — which also answers the open question about which Goodreads spelling to
+use. All three are in `profile.schema.json`, the fixture and the tests, so the plugin can add
+them whenever it likes.
+
+Worth noting what made this a scheduling note rather than a silent breakage: the unmapped-key
+guard that D41 added after a review finding. A transform that quietly dropped unknown keys
+would have turned this into three missing icons nobody noticed.
+
+**Not contingent on the outcome, and already landed:** `_config.yml` had no `defaults:` for
+`_posts`, so a hand-authored post with no explicit `layout:` rendered its raw body with no page
+furniture, silently — the D14/D45 failure class. A `defaults:` entry now supplies
+`layout: post`, verified by building a post that declares none. Front matter still wins, so a
+`layout: distill` post is unaffected, and generated posts (D63) are unchanged.
 
 ---
 

@@ -14,6 +14,21 @@ record; where it conflicts with this plan (the bibliography model per P3, the CI
 P4, the `_projects/` ambivalence per P8, Goodreads vs `_books/`), **this plan wins**, and
 where `docs/DECISIONS.md` records a resolved decision, **that wins over both**.
 
+> **[amended] The scope this whole plan assumes is under review.** `seed.md` makes the graph
+> the "source of truth for CV, students, projects, personal pages", and Phases 5 and 6 built
+> exactly that. [Issue #10](https://github.com/pdlourenco/pdlourenco.github.io/issues/10)
+> proposes narrowing the pipeline to **entity data only** — CV, profile, publication overrides
+> — and authoring narrative content (blog, project write-ups, the Personal page, books)
+> directly as markdown here.
+>
+> **Undecided as of this writing.** `docs/DECISIONS.md` **D66** records the assessment, which
+> is favourable, along with the one gap the proposal does not cover: under D23 a project would
+> end up with two sources, and the rule that resolves it is _the graph owns the record, the
+> repo owns the write-up_. Nothing has been removed, and Phases 5–6 remain as built and
+> merged. If the narrowing is adopted, the phases it retires are 5 and 6 plus the collection
+> half of P8 — and D55–D58, D62, D63 and half of D65 need marking superseded rather than
+> silently outliving their subject.
+
 ---
 
 ## 1. Critical analysis of the seeding doc

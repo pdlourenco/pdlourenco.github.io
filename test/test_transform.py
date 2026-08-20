@@ -128,6 +128,19 @@ def main() -> int:
                   and socials.get("linkedin_username") == "johndoe"
                   and socials.get("orcid_id") == "0000-0002-1825-0097",
                   str(socials))
+            # The Personal-page seam (D66) moves these three from personal.yml to profile.yml.
+            # They are mapped here *first*, on purpose: build_socials raises on an unmapped
+            # key (D41), so if the plugin emitted them before this existed, the next export
+            # would hard-fail the build. Site lands first, plugin second.
+            check("strava uses the gem's real built-in key",
+                  socials.get("strava_userid") == "12345678", str(socials.get("strava_userid")))
+            for net, title in (("wikiloc", "Wikiloc"), ("goodreads", "Goodreads")):
+                check(f"{net} has no jekyll-socials key in any spelling, so it takes the "
+                      "custom {logo,title,url} form — a scalar there crashes the build",
+                      isinstance(socials.get(net), dict)
+                      and socials[net].get("title") == title
+                      and socials[net].get("url"),
+                      str(socials.get(net)))
             check("a network with no built-in key becomes a {logo,title,url} mapping",
                   isinstance(socials.get("cienciavitae"), dict)
                   and "logo" in socials["cienciavitae"],
@@ -155,6 +168,12 @@ def main() -> int:
                   set(pages) == {"music", "cycling_and_hiking", "diy"}, str(sorted(pages)))
             check("the _root pseudo-section leads, before the named ones",
                   pages["music"]["sections"][0]["slug"] == "_root")
+            # The plugin preserves authored section order and alphabetises page keys — two
+            # different rules (D55). Only the first is ours to protect: `diy` is authored
+            # tools-then-projects, which is NOT alphabetical, so a sort here would show up.
+            check("authored section order survives — it is not alphabetised",
+                  [s["slug"] for s in pages["diy"]["sections"]] == ["tools", "projects"],
+                  str([s["slug"] for s in pages["diy"]["sections"]]))
             check("an ampersand slug round-trips to a readable title",
                   pages["cycling_and_hiking"]["title"] == "Cycling & Hiking")
             check("page-level profiles become links that always have a url (D19)",

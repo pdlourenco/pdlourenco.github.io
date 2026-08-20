@@ -28,3 +28,12 @@ scholar:
 cienciavitae:
   id: 0000-0000-0000-0000
   url: "https://www.cienciavitae.pt/0000-0000-0000-0000"
+strava:
+  id: "12345678"
+  url: "https://www.strava.com/athletes/12345678"
+wikiloc:
+  id: johndoe
+  url: "https://www.wikiloc.com/wikiloc/user.do?id=000000"
+goodreads:
+  id: 7400919-johndoe
+  url: "https://www.goodreads.com/user/show/7400919-johndoe"

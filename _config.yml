@@ -299,6 +299,16 @@ plugins:
 
 # Sitemap settings
 defaults:
+  # Jekyll applies no layout to _posts on its own, and al-folio defaults one only for the
+  # `news` collection — so a post with no explicit `layout:` renders its raw body with no page
+  # furniture at all, silently. bin/transform.py injects it for generated posts (D63); this
+  # covers hand-authored ones, which issue #10 would make the normal case. Front matter still
+  # wins, so a post declaring `layout: distill` is unaffected.
+  - scope:
+      path: ""
+      type: "posts"
+    values:
+      layout: "post"
   - scope:
       path: "assets"
     values:
