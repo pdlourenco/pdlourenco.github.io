@@ -128,6 +128,19 @@ def main() -> int:
                   and socials.get("linkedin_username") == "johndoe"
                   and socials.get("orcid_id") == "0000-0002-1825-0097",
                   str(socials))
+            # The Personal-page seam (D66) moves these three from personal.yml to profile.yml.
+            # They are mapped here *first*, on purpose: build_socials raises on an unmapped
+            # key (D41), so if the plugin emitted them before this existed, the next export
+            # would hard-fail the build. Site lands first, plugin second.
+            check("strava uses the gem's real built-in key",
+                  socials.get("strava_userid") == "12345678", str(socials.get("strava_userid")))
+            for net, title in (("wikiloc", "Wikiloc"), ("goodreads", "Goodreads")):
+                check(f"{net} has no jekyll-socials key in any spelling, so it takes the "
+                      "custom {logo,title,url} form — a scalar there crashes the build",
+                      isinstance(socials.get(net), dict)
+                      and socials[net].get("title") == title
+                      and socials[net].get("url"),
+                      str(socials.get(net)))
             check("a network with no built-in key becomes a {logo,title,url} mapping",
                   isinstance(socials.get("cienciavitae"), dict)
                   and "logo" in socials["cienciavitae"],

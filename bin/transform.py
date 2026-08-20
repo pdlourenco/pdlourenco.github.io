@@ -672,6 +672,7 @@ SOCIALS_BUILTIN = [
     ("twitter", "x_username"),
     ("instagram", "instagram_id"),
     ("lastfm", "lastfm_id"),
+    ("strava", "strava_userid"),
     ("web", "work_url"),
 ]
 
@@ -681,6 +682,11 @@ SOCIALS_BUILTIN = [
 SOCIALS_CUSTOM = {
     "soundcloud": ("SoundCloud", "fa-brands fa-soundcloud"),
     "cienciavitae": ("CiênciaVitae", "fa-solid fa-id-card"),
+    # Neither has a jekyll-socials key — checked against the gem, in both spellings for
+    # Goodreads (SCHEMA-NOTES §2 flags that ambiguity; the answer is that neither exists).
+    # Wikiloc has no FontAwesome brand icon either, so it takes a generic solid one.
+    "goodreads": ("Goodreads", "fa-brands fa-goodreads"),
+    "wikiloc": ("Wikiloc", "fa-solid fa-map-location-dot"),
 }
 
 

@@ -6,7 +6,7 @@
   "files": ["cv.yml", "profile.yml", "personal.yml", "publication_overrides.yml", "blog/2026-03-15-a-sample-post.md", "manifest.json"],
   "hashes": {
     "cv.yml": "bd17242229e9eb790329f102c53d6093875c470f64d084b4c7b8ff92c9570ff5",
-    "profile.yml": "026f4067b5f3ce23f7ff6ca72d4646fdd681e8316a979c0a12ad321645e1e376",
+    "profile.yml": "30c57c1ae67f03073ea994d134b575469c054e5300b20e64e97d41756491e16a",
     "personal.yml": "b0e6cd5fc40d5b6efdc5ad251254eb0f7454f2d82b76f05751988c9be39c7155",
     "publication_overrides.yml": "ed56c255c8140e649e011a20108feb03f286733f721723e2c49c857e0bfb3095",
     "blog/2026-03-15-a-sample-post.md": "db3b1e4a8af15c320d13e285f504a2564df7d7448f0fa23ff2c91a2a84ed532c"

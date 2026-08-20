@@ -930,6 +930,18 @@ stands — the owner asked for the page; it just does not go in the nav while it
 > The fixture was also unrepresentative: its pages were in an order `sortKeys` cannot produce.
 > Page keys are now alphabetical, sections keep authored order (`diy` is tools-then-projects),
 > and a test pins the half that matters.
+>
+> **And the asymmetry is justified — I was wrong to call it arbitrary.** Having read only my
+> own side, I suggested the plugin drop `sortKeys(personalPages)` so authored page order could
+> reach the site. The plugin session tested it: dropping it **fails their permutation-invariance
+> property test**, because `personalPages` is built by iterating `getAllPages()`, so its key
+> order is an _index artifact_ with no authored meaning. Section order is different in kind —
+> it is document order in the markdown, which the author really did choose.
+>
+> So sorting pages while preserving sections is principled: **sort what has no meaningful
+> order, preserve what does.** That is a better rule than the one I proposed, and it came from
+> running the test rather than reasoning about it — the same discipline I had just failed to
+> apply in the other direction.
 
 D18 predicted this and it held: `_pages/personal.md` loops over `site.data.personal` with
 `layout: page`, because `page.liquid` renders `{{ content }}` verbatim and Jekyll runs Liquid
@@ -1262,6 +1274,21 @@ repo's `cv.website` comes from `profile.web.url`, not `manifest.website` (verifi
 The seam is **adopted on the plugin side**, and is cheaper than estimated: `lastfm` and
 `soundcloud` were already in its `linkKeys` list, so absorbing the rest is three strings.
 The projects rule needs no plugin change either — its project entries already carry `url`.
+
+**The seam has an ordering constraint of its own, and this one is not vacuous.** `build_socials`
+raises on any `profile.yml` key it has no mapping for (D41) — so if the plugin adds `wikiloc`,
+`strava` or `goodreads` to its `linkKeys` before those mappings exist here, the next export
+**hard-fails the site build**. The site side must land first.
+
+It has: `strava` → `strava_userid` (a real jekyll-socials key), and `wikiloc` + `goodreads` →
+the custom `{logo, title, url}` form, because checking the gem shows neither has a built-in key
+**in any spelling** — which also answers the open question about which Goodreads spelling to
+use. All three are in `profile.schema.json`, the fixture and the tests, so the plugin can add
+them whenever it likes.
+
+Worth noting what made this a scheduling note rather than a silent breakage: the unmapped-key
+guard that D41 added after a review finding. A transform that quietly dropped unknown keys
+would have turned this into three missing icons nobody noticed.
 
 **Not contingent on the outcome, and already landed:** `_config.yml` had no `defaults:` for
 `_posts`, so a hand-authored post with no explicit `layout:` rendered its raw body with no page
