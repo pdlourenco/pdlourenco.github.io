@@ -1116,6 +1116,69 @@ contract fact rather than a code change.
 
 ---
 
+## Open proposal — pipeline scope
+
+### D66 — Narrowing the pipeline to entity data: assessed, **not yet decided**
+
+> **Status: this is an assessment of an open proposal, not a decision.** Nothing here binds
+> anything, and no code has been removed. Recorded so the reasoning is not re-derived, and
+> marked because writing a proposal up as settled is the failure mode D64 names. Tracked as
+> [#10](https://github.com/pdlourenco/pdlourenco.github.io/issues/10) with companion
+> `pdlourenco/logseq-alfolio-export#8`.
+
+The proposal: narrow the Logseq pipeline to **entity data** (CV, profile, publication
+overrides) and author **narrative content** — blog, project write-ups, the Personal page,
+books — directly as markdown in this repo. "The site is a projection of the graph" becomes
+"the CV is a projection of the graph".
+
+**The assessment is favourable, and the strongest evidence is in the code it would delete:**
+
+- **D55 is the schema admitting defeat.** `build_personal` deliberately does not enumerate
+  properties, because "the contract is open on purpose — this page's content is not a fixed
+  schema". A schema whose defining property is that it declines to constrain anything is what
+  modelling non-entity data looks like.
+- **The blog pipeline was already split.** D22 puts images in this repo while prose came from
+  the graph, and `_check_asset_refs` exists only to catch the mismatch that split creates.
+- **`build_posts` barely earns its keep.** Of its four jobs — copy the body, inject `layout`,
+  default `date` from the filename, validate filename and image refs — three are needed _only
+  because_ the file took a trip through the graph.
+
+**The problem the proposal does not address, and the rule that fixes it.** D23 generates
+project detail pages from the same intermediate entries that feed the CV's Projects section.
+Hand-authoring the detail page while the CV entry stays generated gives one project two
+sources — the duplication D23 and D48 exist to prevent. Proposed rule, should the narrowing be
+adopted:
+
+> **The graph owns the record; the repo owns the write-up.** A project's CV entry stays
+> generated (name, dates, institution, importance) and carries a `url` pointing at its
+> hand-authored page. Different content, one source each.
+
+Rejecting the alternative — projects leaving the graph entirely — because it costs the CV a
+Projects section, which is real CV content.
+
+**On `personal.yml`:** it would be _absorbed_, not deleted. Its link properties (`lastfm`,
+`wikiloc`, `strava`, `goodreads`) are identity data that already has a home in `profile.yml` →
+`_data/socials.yml`, and `build_socials` already handles that `{id, url}` shape. The prose
+becomes `_pages/personal.md`.
+
+**One of the proposal's open questions is already closed:** D17 settled native `_books/` over
+Goodreads, with the mechanics verified against the gem. Narrowing changes where entries come
+from, not the mechanism.
+
+**Cost if adopted:** four functions from `bin/transform.py` (~300 lines) and ~25 checks, and
+D55–D58, D62, D63 and half of D65 become historical. Sunk cost should not weigh — the code was
+cheap and the gem findings are banked in `SCHEMA-NOTES.md` either way. The documentation cost
+is the real one: those entries need marking as superseded, or this becomes a third instance of
+the staleness problem (D21, D64).
+
+**Not contingent on the outcome, and already landed:** `_config.yml` had no `defaults:` for
+`_posts`, so a hand-authored post with no explicit `layout:` rendered its raw body with no page
+furniture, silently — the D14/D45 failure class. A `defaults:` entry now supplies
+`layout: post`, verified by building a post that declares none. Front matter still wins, so a
+`layout: distill` post is unaffected, and generated posts (D63) are unchanged.
+
+---
+
 ## Owner action items (nothing in a commit can do these)
 
 GitHub Pages **cannot** build this site itself: it is gem-based (`theme: al_folio_core` plus
