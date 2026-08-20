@@ -1215,6 +1215,30 @@ cheap and the gem findings are banked in `SCHEMA-NOTES.md` either way. The docum
 is the real one: those entries need marking as superseded, or this becomes a third instance of
 the staleness problem (D21, D64).
 
+**Sequencing, if adopted — this is the part that can lose content.** The prose half must be
+re-authored in this repo **before** the plugin stops emitting it. D64's prune removes exactly
+what the previous manifest listed, so an export that drops `personal.yml` deletes the staged
+copy, and the transform prunes the generated pages behind it. Both steps are individually
+correct, and together they open a window in which the only copy of that prose is in the graph.
+Re-author first, stop exporting second.
+
+**Corrections to this entry's own advice, after the plugin session replied.** Two claims here
+were verified against plugin `f9b781c` and were two merges stale when written:
+
+| claim                                                               | actual, at `a6f769f`                                                    |
+| ------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| "`schema_version` is the blocker; nothing processes until it lands" | **repealed** — emitted since PR 2.5; the pipeline runs end to end (D29) |
+| D64/D65 "implemented on neither side"                               | **both shipped** upstream (D64, D65)                                    |
+
+Also settled by that reply: the `website::` opt-in tag and the served hostname have **no
+coupling** in either direction — the plugin never treats `websiteName` as a hostname, and this
+repo's `cv.website` comes from `profile.web.url`, not `manifest.website` (verified at
+`bin/transform.py:629`). A custom domain later changes nothing.
+
+The seam is **adopted on the plugin side**, and is cheaper than estimated: `lastfm` and
+`soundcloud` were already in its `linkKeys` list, so absorbing the rest is three strings.
+The projects rule needs no plugin change either — its project entries already carry `url`.
+
 **Not contingent on the outcome, and already landed:** `_config.yml` had no `defaults:` for
 `_posts`, so a hand-authored post with no explicit `layout:` rendered its raw body with no page
 furniture, silently — the D14/D45 failure class. A `defaults:` entry now supplies
