@@ -3,30 +3,11 @@
 # Covers what the plugin's own fixtures leave empty. Exercises: page-level link
 # objects, the _root pseudo-section for blocks before the first "## Header",
 # section slugging (& -> and), and embeds that must degrade to plain links (D19).
-music:
-  title: Music
-  description: Instruments, bands and listening.
-  lastfm:
-    id: johndoe
-    url: "https://www.last.fm/user/johndoe"
-  sections:
-    _root:
-      - _name: Instruments
-        instruments: guitar, bass, drums
-    bands:
-      - _name: Rainy Days
-        role: guitar
-        spotify:
-          id: Rainy Days
-          url: "https://open.spotify.com/album/0000000000000000000000"
-        bandcamp:
-          id: rainydays
-          url: "https://rainydays.bandcamp.com/"
-    listening:
-      - _name: On repeat
-        album:
-          id: An Album
-          url: "https://open.spotify.com/album/1111111111111111111111"
+#
+# Page keys are in alphabetical order because that is what the plugin emits: its
+# `sortKeys(personalPages)` alphabetises the top level. Section order *inside* a page is
+# authored order, which the plugin deliberately preserves — so `diy` keeps tools-before-
+# projects. The two halves differ, and the fixture has to show both (D55).
 cycling_and_hiking:
   title: Cycling & Hiking
   description: Trails and long rides.
@@ -54,6 +35,30 @@ diy:
       - _name: A Shelf
         material: oak
         gallery: assets/img/personal/diy/shelf
+music:
+  title: Music
+  description: Instruments, bands and listening.
+  lastfm:
+    id: johndoe
+    url: "https://www.last.fm/user/johndoe"
+  sections:
+    _root:
+      - _name: Instruments
+        instruments: guitar, bass, drums
+    bands:
+      - _name: Rainy Days
+        role: guitar
+        spotify:
+          id: Rainy Days
+          url: "https://open.spotify.com/album/0000000000000000000000"
+        bandcamp:
+          id: rainydays
+          url: "https://rainydays.bandcamp.com/"
+    listening:
+      - _name: On repeat
+        album:
+          id: An Album
+          url: "https://open.spotify.com/album/1111111111111111111111"
 reading:
   title: Reading
   description: Books, mostly non-fiction.
